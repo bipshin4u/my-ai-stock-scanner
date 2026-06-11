@@ -596,7 +596,7 @@ def render_charting_layout():
                         sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
                         
                         # Capital allocation warning
-                        if capital_required > account_size:
+                        if capital_required > account_equity:
                             sz_col4.error(f"⚠️ Insufficient Buying Power")
                         else:
                             sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
