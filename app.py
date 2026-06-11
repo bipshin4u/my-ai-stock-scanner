@@ -223,4 +223,64 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
     
-display_master_leaderboard()
+def display_master_leaderboard():
+    df = st.session_state.stacked_results
+    
+    if not df.empty:
+        df = df.drop_duplicates(subset=["Ticker"], keep="last")
+        df['SortOrder'] = df['Action Signal'].map({'🔥 STRONG BUY': 0, '🚨 STRONG SELL': 1, '⏳ HOLD / NEUTRAL': 2})
+        df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
+        
+        total_buys = int(sum(df['Action Signal'] == "🔥 STRONG BUY"))
+        total_sells = int(sum(df['Action Signal'] == "🚨 STRONG SELL"))
+        
+        st.subheader(f"🎯 Aggregated {st.session_state.active_mode} Analysis Metrics")
+        m_col1, m_col2, m_col3 = st.columns(3)
+        m_col1.metric("Strong Buy Setups Found", f"{total_buys} Stocks")
+        m_col2.metric("Strong Sell Setups Found", f"{total_sells} Stocks")
+        m_col3.metric("Total Active Table Tickers", f"{len(df)} Tickers")
+        
+        loaded_batches = ", ".join(sorted(list(st.session_state.scanned_batches)))
+        st.info(f"📁 Current visible data layer: **{loaded_batches}**")
+        
+        st.markdown("---")
+        st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} EST")
+        st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
+        
+        def color_whole_rows(row):
+            if row['Action Signal'] == "🔥 STRONG BUY":
+                return ['background-color: #1e4620; color: #ffffff; font-weight: bold;'] * len(row)
+            elif row['Action Signal'] == "🚨 STRONG SELL":
+                return ['background-color: #611f1d; color: #ffffff; font-weight: bold;'] * len(row)
+            else:
+                return ['background-color: #1a1c23; color: #a3a8b4;'] * len(row)
+        
+        display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
+        styled_df = display_df.style.apply(color_whole_rows, axis=1)
+        
+        # --- MODIFIED BLOCK FOR INTERACTIVE CLICK-SORTING ---
+        st.dataframe(
+            styled_df, 
+            width="stretch", 
+            hide_index=True,
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker", help="Click to sort alphabetically"),
+                "Buy Score": st.column_config.TextColumn("Buy Score", help="Click to sort by entry convergence profile"),
+                "Sell Score": st.column_config.TextColumn("Sell Score", help="Click to sort by short risk alignment"),
+                "Action Signal": st.column_config.TextColumn("Action Signal", help="Click to group actions together")
+            }
+        )
+        # --- END OF MODIFIED BLOCK ---
+        
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            display_df.to_excel(writer, index=False, sheet_name="Market Signals")
+        
+        st.download_button(
+            label="📥 Download Active Report Layout as Excel",
+            data=buffer.getvalue(),
+            file_name=f"Trading_Signals_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("Dashboard view screen empty. Click any scanning trigger on the sidebar panel menu to initiate analysis.")
