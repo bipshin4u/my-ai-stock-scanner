@@ -347,4 +347,92 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
 
+# --- ADVANCED CHARTING VISUALIZATION ENGINE ---
+def render_charting_layout():
+    """
+    Renders an interactive layout chart for a selected ticker 
+    using native calculation arrays to prevent third-party crashes.
+    """
+    df_results = st.session_state.stacked_results
+    
+    if not df_results.empty:
+        st.markdown("---")
+        st.subheader("📈 Charting Layout Indicator Workspace")
+        
+        # 1. Clean dropdown picker populated dynamically from scanned tickers
+        ticker_options = sorted(df_results['Ticker'].unique())
+        selected_ticker = st.selectbox("🎯 Select an analyzed stock to visualize chart layout:", ticker_options)
+        
+        if selected_ticker:
+            with st.spinner(f"Generating indicator chart for {selected_ticker}..."):
+                # Fetch fresh chart history for the selected ticker
+                end_date = datetime.today().strftime('%Y-%m-%d')
+                start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
+                
+                # Re-download data using the established rate-limit bypass session structure
+                session = requests.Session()
+                session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                df_stock = yf.download(selected_ticker, start=start_date, end=end_date, progress=False, session=session)
+                
+                if not df_stock.empty and len(df_stock) >= 200:
+                    # Clean the column headers exactly like the scanner engine
+                    col_strings = [str(c).lower() for c in df_stock.columns]
+                    close_idx, high_idx, low_idx = -1, -1, -1
+                    for c_i, c_str in enumerate(col_strings):
+                        if 'close' in c_str: close_idx = c_i
+                        if 'high' in c_str: high_idx = c_i
+                        if 'low' in c_str: low_idx = c_i
+                    
+                    raw_close = df_stock.iloc[:, close_idx].values.flatten().astype('float64')
+                    raw_high = df_stock.iloc[:, high_idx].values.flatten().astype('float64')
+                    raw_low = df_stock.iloc[:, low_idx].values.flatten().astype('float64')
+                    
+                    # Compute indicators natively to guarantee mathematical alignment
+                    fast_ema = compute_native_ema(raw_close.copy(), 8)
+                    slow_ema = compute_native_ema(raw_close.copy(), 21)
+                    trend_ema = compute_native_ema(raw_close.copy(), 200)
+                    atr_np = compute_native_atr(raw_high, raw_low, raw_close, length=14)
+                    
+                    # Native SuperTrend logic band recreation
+                    src = (raw_high + raw_low) / 2
+                    basic_ub = src + (2.5 * atr_np)
+                    basic_lb = src - (2.5 * atr_np)
+                    final_ub = np.zeros(len(df_stock))
+                    final_lb = np.zeros(len(df_stock))
+                    st_dir = np.zeros(len(df_stock))
+                    
+                    for i in range(1, len(df_stock)):
+                        if basic_ub[i] < final_ub[i-1] or raw_close[i-1] > final_ub[i-1]: final_ub[i] = basic_ub[i]
+                        else: final_ub[i] = final_ub[i-1]
+                        if basic_lb[i] > final_lb[i-1] or raw_close[i-1] < final_lb[i-1]: final_lb[i] = basic_lb[i]
+                        else: final_lb[i] = final_lb[i-1]
+                        if raw_close[i] > final_ub[i]: st_dir[i] = 1
+                        elif raw_close[i] < final_lb[i]: st_dir[i] = -1
+                        else:
+                            st_dir[i] = st_dir[i-1]
+                            if st_dir[i] == 1 and final_lb[i] < final_lb[i-1]: final_lb[i] = final_lb[i-1]
+                            if st_dir[i] == -1 and final_ub[i] > final_ub[i-1]: final_ub[i] = final_ub[i-1]
+                    
+                    # Isolate the final 90 days for clean, zoomed short-to-medium term visual clarity
+                    chart_df = pd.DataFrame({
+                        'Close': raw_close, '8 EMA': fast_ema, '21 EMA': slow_ema, '200 EMA': trend_ema,
+                        'SuperTrend Upper': final_ub, 'SuperTrend Lower': final_lb, 'Direction': st_dir
+                    }, index=df_stock.index).last('90D')
+                    
+                    # Dynamic masking to generate clean plots
+                    chart_df['Active SuperTrend'] = np.where(chart_df['Direction'] == 1, chart_df['SuperTrend Lower'], chart_df['SuperTrend Upper'])
+                    
+                    # 2. Render responsive layout chart using native Streamlit line mapping tools
+                    st.line_chart(
+                        chart_df[['Close', '8 EMA', '21 EMA', '200 EMA', 'Active SuperTrend']],
+                        y=['Close', '8 EMA', '21 EMA', '200 EMA', 'Active SuperTrend'],
+                        color=['#ffffff', '#00d1ff', '#ffb800', '#ff0055', '#00ff66']
+                    )
+                    st.caption("📈 Color Guide: White (Price), Light Blue (8 EMA), Orange (21 EMA), Crimson (200 Bear/Bull Boundary Line), Green/Red (SuperTrend Trailing Stop Floor).")
+                else:
+                    st.error("Insufficient historical trading volume data found to map structural trend chart.")
+
+# --- APPLICATION FOOTPRINT MAP CHANGER ---
+# Append the chart draw call to sit directly under your dashboard leaderboard drawer 
 display_master_leaderboard()
+render_charting_layout()
