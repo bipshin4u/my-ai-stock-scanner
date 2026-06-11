@@ -652,10 +652,10 @@ def render_charting_layout():
     fig.update_layout(xaxis_rangeslider_visible=False, height=650, margin=dict(l=10, r=10, t=20, b=10))
     st.plotly_chart(fig, use_container_width=True)
 
-                    # -- DYNAMIC POSITION SIZING EXECUTION --
-                    current_price = chart_df['Close'].iloc[-1]
-                    current_st_stop = chart_df['Active SuperTrend'].iloc[-1]
-                    current_dir = chart_df['Direction'].iloc[-1]
+    # -- DYNAMIC POSITION SIZING EXECUTION --
+    current_price = chart_df['Close'].iloc[-1]
+    current_st_stop = chart_df['Active SuperTrend'].iloc[-1]
+    current_dir = chart_df['Direction'].iloc[-1]
                     
                     st.markdown("### 🧮 Live Position Sizing")
                     risk_dist = abs(current_price - current_st_stop)
