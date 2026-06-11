@@ -104,7 +104,7 @@ if st.sidebar.button("🚀 Run Live Market Scan"):
                 if val == "🚨 STRONG SELL": return "background-color: #f8d7da; color: #721c24; font-weight: bold;"
                 return ""
             
-            st.dataframe(scanner_df.style.applymap(color_signals, subset=['Action Signal']), use_container_width=True, hide_index=True)
+            st.dataframe(scanner_df.style.map(color_signals, subset=['Action Signal']), use_container_width=True, hide_index=True)
             
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
