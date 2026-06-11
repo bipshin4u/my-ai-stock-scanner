@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import pandas_ta_classic as ta
 import yfinance as yf
 from datetime import datetime, timedelta
 import io
@@ -24,7 +23,7 @@ if "active_mode" not in st.session_state:
 # --- SIDEBAR WATCHLIST CONFIGURATIONS ---
 st.sidebar.header("📋 Scanner Control Panel")
 
-# Compact structured defaults to keep browser formatting clean
+# Baseline configurations for all tiers
 b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS, XOM, CVX, LLY, UNH, V, MA, HD, PG, PFE, MRK, ABBV, KO, PEP, NKE, SBUX, GE, CAT, BA, HON, IBM, ACN, TXN, AMGN, GILD, BABA"
 b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, PATH, SNOW, NET, CRWD, OKTA, DDOG, ZS, FTNT, CHKP, MDB, DOCU, TWLO, PINS, SNAP, SHOP, SE, MELI, PDD, JD, BIDU, GME, AMC"
 b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH, RUN, CSIQ, GTLB, ALGM, AEHR, LSCC, POWI, SLAB, CRUS, COHR, LITE, FN, VRT, MOD, SYM, AOUT, JOBY, ACHR, LUNR, RKLB, BBAI, SOUN"
@@ -46,17 +45,78 @@ batch_1_list = [t.strip().upper() for t in b1_input.split(",") if t.strip()]
 batch_2_list = [t.strip().upper() for t in b2_input.split(",") if t.strip()]
 batch_3_list = [t.strip().upper() for t in b3_input.split(",") if t.strip()]
 
+# --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
+def compute_native_ema(prices, length):
+    """Calculates Exponential Moving Average mathematically."""
+    alpha = 2 / (length + 1)
+    ema = np.zeros(len(prices))
+    if len(prices) > 0:
+        ema[0] = prices[0]
+    for i in range(1, len(prices)):
+        ema[i] = (prices[i] * alpha) + (ema[i-1] * (1 - alpha))
+    return ema
+
+def compute_native_rsi(prices, length=14):
+    """Calculates Relative Strength Index mathematically."""
+    if len(prices) <= length:
+        return np.zeros(len(prices))
+    deltas = np.diff(prices)
+    seed = deltas[:length]
+    up = seed[seed >= 0].sum() / length
+    down = -seed[seed < 0].sum() / length
+    rsi = np.zeros(len(prices))
+    
+    if down == 0:
+        rsi[length] = 100
+    else:
+        rs = up / down
+        rsi[length] = 100 - (100 / (1 + rs))
+        
+    for i in range(length + 1, len(prices)):
+        delta = deltas[i - 1]
+        if delta > 0:
+            up_chg = delta
+            down_chg = 0.0
+        else:
+            up_chg = 0.0
+            down_chg = -delta
+        up = (up * (length - 1) + up_chg) / length
+        down = (down * (length - 1) + down_chg) / length
+        if down == 0:
+            rsi[i] = 100
+        else:
+            rs = up / down
+            rsi[i] = 100 - (100 / (1 + rs))
+    return rsi
+
+def compute_native_atr(high, low, close, length=14):
+    """Calculates Average True Range mathematically."""
+    tr = np.zeros(len(close))
+    if len(close) > 0:
+        tr[0] = high[0] - low[0]
+    for i in range(1, len(close)):
+        hl = high[i] - low[i]
+        hpc = abs(high[i] - close[i-1])
+        lpc = abs(low[i] - close[i-1])
+        tr[i] = max(hl, hpc, lpc)
+    
+    atr = np.zeros(len(close))
+    if len(close) >= length:
+        atr[length-1] = np.mean(tr[:length])
+        for i in range(length, len(close)):
+            atr[i] = (atr[i-1] * (length - 1) + tr[i]) / length
+    return atr
+
 def run_scanner(tickers, is_discovery=False):
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
-    st_period, st_multiplier = 10, 2.5
+    st_multiplier = 2.5
     regime_len, regime_threshold = 14, 1.2
 
     results = []
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    # Establish an encrypted browser session to bypass rate limits
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -66,42 +126,35 @@ def run_scanner(tickers, is_discovery=False):
     
     for idx, ticker in enumerate(tickers):
         try:
-            # Download ticker data with standard layout configurations
             df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
             
             if df.empty or len(df) < trend_ema_len:
                 continue
                 
-            # Flatten multiindex data allocations by capturing core values directly
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col if isinstance(col, tuple) else col for col in df.columns]
+            # --- Bulletproof Row Extract: Grab data columns regardless of multiindex nesting labels ---
+            col_strings = [str(c).lower() for c in df.columns]
+            close_idx, high_idx, low_idx = -1, -1, -1
             
-            # Capitalize tracking columns
-            df.columns = [str(c).strip().capitalize() for c in df.columns]
-            
-            if 'Close' not in df.columns:
+            for c_i, c_str in enumerate(col_strings):
+                if 'close' in c_str: close_idx = c_i
+                if 'high' in c_str: high_idx = c_i
+                if 'low' in c_str: low_idx = c_i
+                
+            if close_idx == -1 or high_idx == -1 or low_idx == -1:
                 continue
 
-            # Extract numeric series vectors
-            raw_close = df['Close'].values.flatten().astype('float64')
-            raw_high = df['High'].values.flatten().astype('float64')
-            raw_low = df['Low'].values.flatten().astype('float64')
-            flat_index = pd.to_datetime(df.index).tz_localize(None)
+            raw_close = df.iloc[:, close_idx].values.flatten().astype('float64')
+            raw_high = df.iloc[:, high_idx].values.flatten().astype('float64')
+            raw_low = df.iloc[:, low_idx].values.flatten().astype('float64')
 
-            close_series = pd.Series(raw_close, index=flat_index)
-            high_series = pd.Series(raw_high, index=flat_index)
-            low_series = pd.Series(raw_low, index=flat_index)
+            # Calculate Native indicators securely
+            fast_ema = compute_native_ema(raw_close.copy(), fast_ema_len)
+            slow_ema = compute_native_ema(raw_close.copy(), slow_ema_len)
+            trend_ema = compute_native_ema(raw_close.copy(), trend_ema_len)
+            rsi = compute_native_rsi(raw_close.copy(), rsi_len)
+            atr_np = compute_native_atr(raw_high, raw_low, raw_close, length=regime_len)
 
-            # Compute EMA and RSI trends using isolated numpy inputs
-            fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
-            slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
-            trend_ema = ta.ema(close_series, length=trend_ema_len).to_numpy()
-            rsi = ta.rsi(close_series, length=rsi_len).to_numpy()
-            
-            atr = ta.atr(high_series, low_series, close_series, length=regime_len)
-            atr_np = atr.to_numpy()
-            
-            # Mathematical SuperTrend native loop logic
+            # Native SuperTrend Calculation
             src = (raw_high + raw_low) / 2
             basic_ub = src + (st_multiplier * atr_np)
             basic_lb = src - (st_multiplier * atr_np)
@@ -132,22 +185,21 @@ def run_scanner(tickers, is_discovery=False):
                     if st_dir_array[i] == -1 and final_ub[i] > final_ub[i-1]:
                         final_ub[i] = final_ub[i-1]
             
-            std_dev = close_series.rolling(regime_len).std()
-            market_volatility = (std_dev / atr).fillna(1.0).to_numpy()
+            # Regime calculation
+            rolling_std = pd.Series(raw_close).rolling(regime_len).std().to_numpy()
+            market_volatility = np.where(atr_np > 0, rolling_std / atr_np, 1.0)
 
-            # Volatility regime gate checks
             is_trending = market_volatility[-1] > regime_threshold
             ema_buy_trigger = fast_ema[-1] > slow_ema[-1] and fast_ema[-2] <= slow_ema[-2]
             ema_sell_trigger = fast_ema[-1] < slow_ema[-1] and fast_ema[-2] >= slow_ema[-2]
-            above_macro_trend = close_series.iloc[-1] > trend_ema[-1]
+            above_macro_trend = raw_close[-1] > trend_ema[-1]
             
             st_bullish = st_dir_array[-1] == 1 if is_trending else True
             st_bearish = st_dir_array[-1] == -1 if is_trending else True
 
-            rsi_bullish_div = rsi[-1] > rsi[-2] and close_series.iloc[-1] <= close_series.iloc[-2] and rsi[-1] < rsi_upper
-            rsi_bearish_div = rsi[-1] < rsi[-2] and close_series.iloc[-1] >= close_series.iloc[-2] and rsi[-1] > rsi_lower
+            rsi_bullish_div = rsi[-1] > rsi[-2] and raw_close[-1] <= raw_close[-2] and rsi[-1] < rsi_upper
+            rsi_bearish_div = rsi[-1] < rsi[-2] and raw_close[-1] >= raw_close[-2] and rsi[-1] > rsi_lower
 
-            # Compute final mathematical alignment score
             buy_score = 0
             sell_score = 0
             if above_macro_trend: buy_score += 1
@@ -165,7 +217,7 @@ def run_scanner(tickers, is_discovery=False):
 
             results.append({
                 "Ticker": ticker,
-                "Last Close": f"${close_series.iloc[-1]:.2f}",
+                "Last Close": f"${raw_close[-1]:.2f}",
                 "Market Regime": regime_label,
                 "Buy Score": f"{buy_score}/6",
                 "Sell Score": f"{sell_score}/6",
@@ -174,14 +226,14 @@ def run_scanner(tickers, is_discovery=False):
             })
             
             if is_discovery:
-                time.sleep(0.35)
-                
-        except Exception as e:
-            pass
+            time.sleep(0.35)
             
-        progress_bar.progress((idx + 1) / len(tickers))
+    except Exception as e:
+        pass
         
-    return pd.DataFrame(results)
+    progress_bar.progress((idx + 1) / len(tickers))
+    
+return pd.DataFrame(results)
 
 def display_master_leaderboard():
     df = st.session_state.stacked_results
@@ -218,7 +270,6 @@ def display_master_leaderboard():
         display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
         styled_df = display_df.style.apply(color_whole_rows, axis=1)
         
-        # ACTIVE INTERACTIVE CLICK-SORTING ENGINE
         st.dataframe(
             styled_df, 
             width="stretch", 
