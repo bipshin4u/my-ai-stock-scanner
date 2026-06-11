@@ -5,8 +5,10 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import io
 import time
+import requests
+import numpy as np
 
-# Page Setup
+# Page Layout Configuration
 st.set_page_config(page_title="AI Market Confluence Scanner", layout="wide")
 st.title("📊 AI Market Confluence Live Dashboard")
 st.write("Calculates 8/21 EMA triggers, RSI divergence, and automated SuperTrend regime bypass filters.")
@@ -22,9 +24,9 @@ if "active_mode" not in st.session_state:
 # --- SIDEBAR WATCHLIST CONFIGURATIONS ---
 st.sidebar.header("📋 Scanner Control Panel")
 
-# Baseline configurations for all tiers
+# Compact structured defaults to keep browser formatting clean
 b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS, XOM, CVX, LLY, UNH, V, MA, HD, PG, PFE, MRK, ABBV, KO, PEP, NKE, SBUX, GE, CAT, BA, HON, IBM, ACN, TXN, AMGN, GILD, BABA"
-b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, AI, PATH, SNOW, NET, CRWD, OKTA, DDOG, ZS, FTNT, CHKP, MDB, DOCU, TWLO, PINS, SNAP, SHOP, SE, MELI, PDD, JD, BIDU, GME, AMC"
+b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, PATH, SNOW, NET, CRWD, OKTA, DDOG, ZS, FTNT, CHKP, MDB, DOCU, TWLO, PINS, SNAP, SHOP, SE, MELI, PDD, JD, BIDU, GME, AMC"
 b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH, RUN, CSIQ, GTLB, ALGM, AEHR, LSCC, POWI, SLAB, CRUS, COHR, LITE, FN, VRT, MOD, SYM, AOUT, JOBY, ACHR, LUNR, RKLB, BBAI, SOUN"
 
 # User Custom entry list block
@@ -45,9 +47,6 @@ batch_2_list = [t.strip().upper() for t in b2_input.split(",") if t.strip()]
 batch_3_list = [t.strip().upper() for t in b3_input.split(",") if t.strip()]
 
 def run_scanner(tickers, is_discovery=False):
-    import requests
-    import numpy as np
-    
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
     st_period, st_multiplier = 10, 2.5
@@ -57,40 +56,33 @@ def run_scanner(tickers, is_discovery=False):
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    # Establish an encrypted web browser session to bypass Yahoo rate limits
+    # Establish an encrypted browser session to bypass rate limits
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     })
 
     progress_bar = st.progress(0)
     
     for idx, ticker in enumerate(tickers):
         try:
-            # 1. Download data with standard parameters
+            # Download ticker data with standard layout configurations
             df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
             
             if df.empty or len(df) < trend_ema_len:
                 continue
                 
-            # 2. Flatten MultiIndex column structures cleanly
+            # Flatten multiindex data allocations by capturing core values directly
             if isinstance(df.columns, pd.MultiIndex):
-                if ticker in df.columns.get_level_values(0):
-                    df = df[[ticker]].copy()
-                    df.columns = df.columns.get_level_values(1)
-                elif ticker in df.columns.get_level_values(1):
-                    df = df.xs(ticker, axis=1, level=1)
-                else:
-                    df.columns = df.columns.get_level_values(0)
+                df.columns = [col if isinstance(col, tuple) else col for col in df.columns]
             
+            # Capitalize tracking columns
             df.columns = [str(c).strip().capitalize() for c in df.columns]
             
             if 'Close' not in df.columns:
                 continue
 
-            # 3. Format clean flat pandas series maps
+            # Extract numeric series vectors
             raw_close = df['Close'].values.flatten().astype('float64')
             raw_high = df['High'].values.flatten().astype('float64')
             raw_low = df['Low'].values.flatten().astype('float64')
@@ -100,7 +92,7 @@ def run_scanner(tickers, is_discovery=False):
             high_series = pd.Series(raw_high, index=flat_index)
             low_series = pd.Series(raw_low, index=flat_index)
 
-            # 4. Compute core EMAs and RSI
+            # Compute EMA and RSI trends using isolated numpy inputs
             fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
             slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
             trend_ema = ta.ema(close_series, length=trend_ema_len).to_numpy()
@@ -109,9 +101,7 @@ def run_scanner(tickers, is_discovery=False):
             atr = ta.atr(high_series, low_series, close_series, length=regime_len)
             atr_np = atr.to_numpy()
             
-            # --- INSTITUTIONAL PATCH: NATIVE MATHEMATICAL SUPERTREND ENGINE ---
-            # Calculates the pure true ATR bands to find definitive trend directions 
-            # without utilizing unstable third-party parsing functions.
+            # Mathematical SuperTrend native loop logic
             src = (raw_high + raw_low) / 2
             basic_ub = src + (st_multiplier * atr_np)
             basic_lb = src - (st_multiplier * atr_np)
@@ -121,19 +111,16 @@ def run_scanner(tickers, is_discovery=False):
             st_dir_array = np.zeros(len(df))
             
             for i in range(1, len(df)):
-                # Upper Band Calculation
                 if basic_ub[i] < final_ub[i-1] or raw_close[i-1] > final_ub[i-1]:
                     final_ub[i] = basic_ub[i]
                 else:
                     final_ub[i] = final_ub[i-1]
                     
-                # Lower Band Calculation
                 if basic_lb[i] > final_lb[i-1] or raw_close[i-1] < final_lb[i-1]:
                     final_lb[i] = basic_lb[i]
                 else:
                     final_lb[i] = final_lb[i-1]
                     
-                # Direction Definition Gate
                 if raw_close[i] > final_ub[i]:
                     st_dir_array[i] = 1
                 elif raw_close[i] < final_lb[i]:
@@ -144,12 +131,11 @@ def run_scanner(tickers, is_discovery=False):
                         final_lb[i] = final_lb[i-1]
                     if st_dir_array[i] == -1 and final_ub[i] > final_ub[i-1]:
                         final_ub[i] = final_ub[i-1]
-            # ------------------------------------------------------------------
             
             std_dev = close_series.rolling(regime_len).std()
             market_volatility = (std_dev / atr).fillna(1.0).to_numpy()
 
-            # Strategy Alignment Evaluation Rules
+            # Volatility regime gate checks
             is_trending = market_volatility[-1] > regime_threshold
             ema_buy_trigger = fast_ema[-1] > slow_ema[-1] and fast_ema[-2] <= slow_ema[-2]
             ema_sell_trigger = fast_ema[-1] < slow_ema[-1] and fast_ema[-2] >= slow_ema[-2]
@@ -161,7 +147,7 @@ def run_scanner(tickers, is_discovery=False):
             rsi_bullish_div = rsi[-1] > rsi[-2] and close_series.iloc[-1] <= close_series.iloc[-2] and rsi[-1] < rsi_upper
             rsi_bearish_div = rsi[-1] < rsi[-2] and close_series.iloc[-1] >= close_series.iloc[-2] and rsi[-1] > rsi_lower
 
-            # Scoring compilation
+            # Compute final mathematical alignment score
             buy_score = 0
             sell_score = 0
             if above_macro_trend: buy_score += 1
@@ -173,8 +159,8 @@ def run_scanner(tickers, is_discovery=False):
             if is_trending and rsi_bullish_div: buy_score += 2
             if is_trending and rsi_bearish_div: sell_score += 2
 
-            regime_label = "TRENDING 📈" if is_trending else "RANGING ↔️ (Bypassed)"
-            signal = "🔥 STRONG BUY" if buy_score >= 5 else "🚨 STRONG SELL" if sell_score >= 5 else "⏳ HOLD / NEUTRAL"
+            regime_label = "TRENDING" if is_trending else "RANGING (Bypassed)"
+            signal = "BUY" if buy_score >= 5 else "SELL" if sell_score >= 5 else "HOLD"
             numeric_score = buy_score if buy_score >= sell_score else -sell_score
 
             results.append({
@@ -190,7 +176,7 @@ def run_scanner(tickers, is_discovery=False):
             if is_discovery:
                 time.sleep(0.35)
                 
-        except Exception as scan_err:
+        except Exception as e:
             pass
             
         progress_bar.progress((idx + 1) / len(tickers))
@@ -202,11 +188,11 @@ def display_master_leaderboard():
     
     if not df.empty:
         df = df.drop_duplicates(subset=["Ticker"], keep="last")
-        df['SortOrder'] = df['Action Signal'].map({'🔥 STRONG BUY': 0, '🚨 STRONG SELL': 1, '⏳ HOLD / NEUTRAL': 2})
+        df['SortOrder'] = df['Action Signal'].map({'BUY': 0, 'SELL': 1, 'HOLD': 2})
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
         
-        total_buys = int(sum(df['Action Signal'] == "🔥 STRONG BUY"))
-        total_sells = int(sum(df['Action Signal'] == "🚨 STRONG SELL"))
+        total_buys = int(sum(df['Action Signal'] == "BUY"))
+        total_sells = int(sum(df['Action Signal'] == "SELL"))
         
         st.subheader(f"🎯 Aggregated {st.session_state.active_mode} Analysis Metrics")
         m_col1, m_col2, m_col3 = st.columns(3)
@@ -219,18 +205,31 @@ def display_master_leaderboard():
         
         st.markdown("---")
         st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} EST")
+        st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
         
         def color_whole_rows(row):
-            if row['Action Signal'] == "🔥 STRONG BUY":
+            if row['Action Signal'] == "BUY":
                 return ['background-color: #1e4620; color: #ffffff; font-weight: bold;'] * len(row)
-            elif row['Action Signal'] == "🚨 STRONG SELL":
+            elif row['Action Signal'] == "SELL":
                 return ['background-color: #611f1d; color: #ffffff; font-weight: bold;'] * len(row)
             else:
                 return ['background-color: #1a1c23; color: #a3a8b4;'] * len(row)
         
         display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
         styled_df = display_df.style.apply(color_whole_rows, axis=1)
-        st.dataframe(styled_df, width="stretch", hide_index=True)
+        
+        # ACTIVE INTERACTIVE CLICK-SORTING ENGINE
+        st.dataframe(
+            styled_df, 
+            width="stretch", 
+            hide_index=True,
+            column_config={
+                "Ticker": st.column_config.TextColumn("Ticker"),
+                "Buy Score": st.column_config.TextColumn("Buy Score"),
+                "Sell Score": st.column_config.TextColumn("Sell Score"),
+                "Action Signal": st.column_config.TextColumn("Action Signal")
+            }
+        )
         
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -278,7 +277,7 @@ if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df2], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 2 (Large)")
         st.rerun()
-        
+
 if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
     with st.spinner("Processing Ranks 101-150..."):
         if st.session_state.active_mode != "Discovery Batches":
@@ -289,7 +288,7 @@ if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df3], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 3 (Mid/Small)")
         st.rerun()
-        
+
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
     st.session_state.stacked_results = pd.DataFrame()
@@ -297,64 +296,5 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
     st.session_state.active_mode = "None"
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
-    
-def display_master_leaderboard():
-    df = st.session_state.stacked_results
-    
-    if not df.empty:
-        df = df.drop_duplicates(subset=["Ticker"], keep="last")
-        df['SortOrder'] = df['Action Signal'].map({'🔥 STRONG BUY': 0, '🚨 STRONG SELL': 1, '⏳ HOLD / NEUTRAL': 2})
-        df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
-        
-        total_buys = int(sum(df['Action Signal'] == "🔥 STRONG BUY"))
-        total_sells = int(sum(df['Action Signal'] == "🚨 STRONG SELL"))
-        
-        st.subheader(f"🎯 Aggregated {st.session_state.active_mode} Analysis Metrics")
-        m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric("Strong Buy Setups Found", f"{total_buys} Stocks")
-        m_col2.metric("Strong Sell Setups Found", f"{total_sells} Stocks")
-        m_col3.metric("Total Active Table Tickers", f"{len(df)} Tickers")
-        
-        loaded_batches = ", ".join(sorted(list(st.session_state.scanned_batches)))
-        st.info(f"📁 Current visible data layer: **{loaded_batches}**")
-        
-        st.markdown("---")
-        st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} EST")
-        st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
-        
-        def color_whole_rows(row):
-            if row['Action Signal'] == "🔥 STRONG BUY":
-                return ['background-color: #1e4620; color: #ffffff; font-weight: bold;'] * len(row)
-            elif row['Action Signal'] == "🚨 STRONG SELL":
-                return ['background-color: #611f1d; color: #ffffff; font-weight: bold;'] * len(row)
-            else:
-                return ['background-color: #1a1c23; color: #a3a8b4;'] * len(row)
-        
-        display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
-        styled_df = display_df.style.apply(color_whole_rows, axis=1)
-        
-        # ACTIVE INTERACTIVE CLICK-SORTING COMPONENT
-        st.dataframe(
-            styled_df, 
-            width="stretch", 
-            hide_index=True,
-            column_config={
-                "Ticker": st.column_config.TextColumn("Ticker", help="Click to sort alphabetically"),
-                "Buy Score": st.column_config.TextColumn("Buy Score", help="Click to sort by entry convergence profile"),
-                "Sell Score": st.column_config.TextColumn("Sell Score", help="Click to sort by short risk alignment"),
-                "Action Signal": st.column_config.TextColumn("Action Signal", help="Click to group actions together")
-            }
-        )
-        
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            display_df.to_excel(writer, index=False, sheet_name="Market Signals")
-        
-        st.download_button(
-            label="📥 Download Active Report Layout as Excel",
-            data=buffer.getvalue(),
-            file_name=f"Trading_Signals_{datetime.now().strftime('%Y-%m-%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.warning("Dashboard view screen empty. Click any scanning trigger on the sidebar panel menu to initiate analysis.")
+
+display_master_leaderboard()
