@@ -125,6 +125,44 @@ def format_tickers(ticker_string, mode):
         
     return corrected_list
 
+# ==============================================================================
+# --- SIDEBAR UI: WATCHLISTS & CALCULATORS ---
+# ==============================================================================
+st.sidebar.markdown("---")
+
+# 1. The Custom Watchlist Text Area (Always visible for quick access)
+user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
+watchlist = format_tickers(user_input, market_mode)
+
+st.sidebar.markdown("---")
+
+# 2. The Collapsible Discovery Batches
+with st.sidebar.expander("⚙️ View / Edit Discovery Ticker Blocks", expanded=False):
+    st.caption("💡 These lists are automatically pulled from live index data!")
+    b1_input = st.text_area("Batch 1 Tickers:", b1_default, height=100)
+    b2_input = st.text_area("Batch 2 Tickers:", b2_default, height=100)
+    b3_input = st.text_area("Batch 3 Tickers:", b3_default, height=100)
+
+batch_1_list = format_tickers(b1_input, market_mode)
+batch_2_list = format_tickers(b2_input, market_mode)
+batch_3_list = format_tickers(b3_input, market_mode)
+
+st.sidebar.markdown("---")
+
+# 3. The Collapsible Risk & Sizing Calculator
+with st.sidebar.expander("💰 Risk & Sizing Calculator", expanded=False):
+    base_currency = st.radio("Base Currency", ["USD ($)", "INR (₹)"], horizontal=True)
+    account_equity = st.number_input("Total Account Equity", value=100000.00, step=1000.0)
+    risk_pct = st.slider("Max Risk Per Trade (%)", 0.1, 5.0, 1.0, 0.1)
+    
+    max_risk_amount = account_equity * (risk_pct / 100)
+    curr_symbol = "$" if "USD" in base_currency else "₹"
+    
+    st.info(f"**Max Capital Risked Per Trade:**\n\n{curr_symbol}{max_risk_amount:,.2f}")
+
+st.sidebar.markdown("---")
+# ==============================================================================
+
 # --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
 def compute_native_ema(prices, length):
     """Calculates Exponential Moving Average mathematically."""
@@ -383,20 +421,6 @@ def display_master_leaderboard():
     else:
         st.warning("Dashboard view screen empty. Click any scanning trigger on the sidebar panel menu to initiate analysis.")
         
-# --- DYNAMIC POSITION SIZING & RISK DASHBOARD ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("💰 Risk & Sizing Calculator")
-
-# Currency selector for multi-market flexibility
-currency_symbol = st.sidebar.radio("Base Currency", ["USD ($)", "INR (₹)"], horizontal=True)
-currency_char = "$" if "USD" in currency_symbol else "₹"
-
-account_size = st.sidebar.number_input(f"Total Account Equity ({currency_char})", value=100000.0, step=1000.0)
-risk_pct = st.sidebar.slider("Max Risk Per Trade (%)", 0.1, 5.0, 1.0, 0.1)
-
-risk_allowance = account_size * (risk_pct / 100)
-st.sidebar.info(f"**Max Capital Risked Per Trade:** {currency_char}{risk_allowance:,.2f}")
-
 # --- UI SIDEBAR INTERACTION BUTTONS ---
 st.sidebar.markdown("---")
 
