@@ -178,7 +178,20 @@ def run_scanner(tickers, is_discovery=False):
     
     for idx, ticker in enumerate(tickers):
         try:
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
+            # --- Smart Retry Protocol for Yahoo Rate Limits ---
+            max_attempts = 3
+            df = pd.DataFrame()
+            
+            for attempt in range(max_attempts):
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
+                
+                # If we successfully got data, break out of the retry loop
+                if not df.empty and len(df) > 0:
+                    break
+                
+                # If it failed (rate limited), pause for 2.5 seconds before trying again
+                time.sleep(2.5)
+            # --------------------------------------------------
             
             if df.empty or len(df) < trend_ema_len:
                 continue
@@ -278,7 +291,7 @@ def run_scanner(tickers, is_discovery=False):
             })
 
             if is_discovery:
-                time.sleep(1.0)
+                time.sleep(1.5)
 
         except Exception as e:
             pass
