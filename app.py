@@ -677,9 +677,6 @@ def render_charting_layout():
             sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
     else:
         st.warning("Risk distance is zero. Wait for valid volatility expansion.")
-
-else:
-    st.error("Insufficient historical trading volume data found to map structural trend chart.")
                     
 # ==============================================================================
 # --- MAIN WORKSPACE TERMINAL TABS ---
