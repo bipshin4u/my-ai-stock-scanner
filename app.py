@@ -128,7 +128,7 @@ def format_tickers(ticker_string, mode):
 # ==============================================================================
 # --- SIDEBAR UI: WATCHLISTS & CALCULATORS ---
 # ==============================================================================
-st.sidebar.markdown("---")
+#st.sidebar.markdown("---")
 
 # 1. The Custom Watchlist Text Area (Always visible for quick access)
 user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
