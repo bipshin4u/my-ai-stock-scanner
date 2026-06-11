@@ -9,7 +9,7 @@ import time
 # Page Setup
 st.set_page_config(page_title="AI Market Confluence Scanner", layout="wide")
 st.title("📊 AI Market Confluence Live Dashboard")
-st.write("Calculates 8/21 EMA triggers, RSI divergence, and automated SuperTrend regime bypass filters using live indices.")
+st.write("Calculates 8/21 EMA triggers, RSI divergence, and automated SuperTrend regime bypass filters.")
 
 # Initialize Session State Memory (Temporary browser database)
 if "stacked_results" not in st.session_state:
@@ -19,41 +19,31 @@ if "scanned_batches" not in st.session_state:
 if "active_mode" not in st.session_state:
     st.session_state.active_mode = "None"
 
-# Sidebar Watchlist Input
-st.sidebar.header("📋 Custom Watchlist Mode")
+# --- SIDEBAR WATCHLIST CONFIGURATIONS ---
+st.sidebar.header("📋 Scanner Control Panel")
+
+# Baseline configurations for all tiers
+b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS, XOM, CVX, LLY, UNH, V, MA, HD, PG, PFE, MRK, ABBV, KO, PEP, NKE, SBUX, GE, CAT, BA, HON, IBM, ACN, TXN, AMGN, GILD, BABA"
+b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, AI, PATH, SNOW, NET, CRWD, OKTA, DDOG, ZS, FTNT, CHKP, MDB, DOCU, TWLO, PINS, SNAP, SHOP, SE, MELI, PDD, JD, BIDU, GME, AMC"
+b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH, RUN, CSIQ, GTLB, ALGM, AEHR, LSCC, POWI, SLAB, CRUS, COHR, LITE, FN, VRT, MOD, SYM, AOUT, JOBY, ACHR, LUNR, RKLB, BBAI, SOUN"
+
+# User Custom entry list block
 default_watchlist = "AAPL, MSFT, NVDA, AMD, META, AMZN, GOOGL, TSLA, NFLX, AVGO"
-user_input = st.sidebar.text_area("Edit your custom stocks (comma separated):", default_watchlist, height=100)
+user_input = st.sidebar.text_area("✍️ Edit Custom Watchlist Tickers:", default_watchlist, height=100)
 watchlist = [t.strip().upper() for t in user_input.split(",") if t.strip()]
 
-@st.cache_data(ttl=86400)
-def fetch_live_index_tickers():
-    """
-    Fetches raw developer-JSON index datasets from open financial repos
-    to permanently bypass HTML text-parsing wall errors and 403 blocks.
-    """
-    import urllib.request
-    import json
-    
-    try:
-        # 1. Fetch S&P 500 Tickers via clean financial data repo
-        sp500_url = "https://githubusercontent.com"
-        with urllib.request.urlopen(sp500_url) as url:
-            sp500_data = json.loads(url.read().decode())
-        sp500_tickers = [item['Symbol'].replace('.', '-') for item in sp500_data]
+# Advanced Sidebar configurations to let you customize discovery components on the fly
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Edit Discovery Groups")
+with st.sidebar.expander("View / Edit Ticker Blocks"):
+    b1_input = st.text_area("Batch 1 Tickers:", b1_default, height=100)
+    b2_input = st.text_area("Batch 2 Tickers:", b2_default, height=100)
+    b3_input = st.text_area("Batch 3 Tickers:", b3_default, height=100)
 
-        # 2. Fetch Nasdaq 100 Tickers via clean benzinga listing dataset repo
-        ndx_url = "https://githubusercontent.com"
-        with urllib.request.urlopen(ndx_url) as url:
-            ndx_data = json.loads(url.read().decode())
-        # The list is a simple list of string tickers
-        ndx_tickers = [ticker.replace('.', '-') for ticker in ndx_data]
-        
-        return sp500_tickers, ndx_tickers
-    except Exception as e:
-        st.sidebar.error(f"Live fetch error: {str(e)}. Using baseline matrix.")
-        fallback = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD", "NFLX", "AVGO"]
-        return fallback, fallback
-        
+batch_1_list = [t.strip().upper() for t in b1_input.split(",") if t.strip()]
+batch_2_list = [t.strip().upper() for t in b2_input.split(",") if t.strip()]
+batch_3_list = [t.strip().upper() for t in b3_input.split(",") if t.strip()]
+
 def run_scanner(tickers, is_discovery=False):
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
@@ -124,7 +114,7 @@ def run_scanner(tickers, is_discovery=False):
             })
             
             if is_discovery:
-                time.sleep(0.12) # Safeguard API pacing delay
+                time.sleep(0.10)
                 
         except:
             pass
@@ -137,7 +127,6 @@ def display_master_leaderboard():
     
     if not df.empty:
         df = df.drop_duplicates(subset=["Ticker"], keep="last")
-        
         df['SortOrder'] = df['Action Signal'].map({'🔥 STRONG BUY': 0, '🚨 STRONG SELL': 1, '⏳ HOLD / NEUTRAL': 2})
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
         
@@ -181,75 +170,56 @@ def display_master_leaderboard():
     else:
         st.warning("Dashboard view screen empty. Click any scanning trigger on the sidebar panel menu to initiate analysis.")
 
-# Load dynamic web lists on initial script compilation execution
-sp500_live, ndx_live = fetch_live_index_tickers()
-
 # --- UI SIDEBAR INTERACTION BUTTONS ---
 st.sidebar.markdown("---")
-st.sidebar.header("🔍 Execution Control Center")
-st.sidebar.write("Launch specific market scanning pipelines below.")
 
-# 1. Isolated Custom Watchlist Mode
 if st.sidebar.button("🚀 Run Custom Watchlist Scan"):
     with st.spinner("Analyzing custom watchlist tickers exclusively..."):
         st.session_state.stacked_results = pd.DataFrame()
         st.session_state.scanned_batches = {"Custom Watchlist"}
         st.session_state.active_mode = "Custom Watchlist"
-        
         res_df = run_scanner(watchlist, is_discovery=False)
         st.session_state.stacked_results = res_df
         st.rerun()
 
-# 2. Dynamic Batch 1 Trigger (First 50 of the live Nasdaq-100 index)
-if st.sidebar.button("🔍 Scan Batch 1: Nasdaq Core (1-50)"):
-    with st.spinner("Processing dynamic Nasdaq-100 Ranks 1-50..."):
+if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
+    with st.spinner("Processing Ranks 1-50..."):
         if st.session_state.active_mode != "Discovery Batches":
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
             st.session_state.active_mode = "Discovery Batches"
-            
-        target_tickers = ndx_live[:50]
-        df1 = run_scanner(target_tickers, is_discovery=True)
+        df1 = run_scanner(batch_1_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df1], ignore_index=True)
-        st.session_state.scanned_batches.add("Nasdaq Batch 1")
+        st.session_state.scanned_batches.add("Batch 1 (Mega)")
         st.rerun()
-        
-# 3. Dynamic Batch 2 Trigger (Next 50 of the live Nasdaq-100 index)
-if st.sidebar.button("⏭️ Scan Batch 2: Nasdaq Expansion (51-100)"):
-    with st.spinner("Processing dynamic Nasdaq-100 Ranks 51-100..."):
+
+if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
+    with st.spinner("Processing Ranks 51-100..."):
         if st.session_state.active_mode != "Discovery Batches":
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
             st.session_state.active_mode = "Discovery Batches"
-            
-        target_tickers = ndx_live[50:100]
-        df2 = run_scanner(target_tickers, is_discovery=True)
+        df2 = run_scanner(batch_2_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df2], ignore_index=True)
-        st.session_state.scanned_batches.add("Nasdaq Batch 2")
+        st.session_state.scanned_batches.add("Batch 2 (Large)")
         st.rerun()
         
-# 4. Dynamic Batch 3 Trigger (Top 50 Alpha Large/Mid Caps from S&P 500)
-if st.sidebar.button("🔬 Scan Batch 3: S&P Alpha Layer (Top 50)"):
-    with st.spinner("Processing dynamic S&P 500 Alpha Layer..."):
+if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
+    with st.spinner("Processing Ranks 101-150..."):
         if st.session_state.active_mode != "Discovery Batches":
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
             st.session_state.active_mode = "Discovery Batches"
-            
-        target_tickers = sp500_live[:50]
-        df3 = run_scanner(target_tickers, is_discovery=True)
+        df3 = run_scanner(batch_3_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df3], ignore_index=True)
-        st.session_state.scanned_batches.add("S&P Alpha Batch 3")
+        st.session_state.scanned_batches.add("Batch 3 (Mid/Small)")
         st.rerun()
         
-# 5. Manual Clear System
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
-    st.session_state.stacked_results = pd.DataFrame()
-    st.session_state.scanned_batches = set()
+    st.session_state.stacked_results = pd.DataFrame()st.session_state.scanned_batches = set()
     st.session_state.active_mode = "None"
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
     
-# Execute Drawing Routine
 display_master_leaderboard()
