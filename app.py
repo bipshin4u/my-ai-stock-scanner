@@ -217,7 +217,8 @@ if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
         
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
-    st.session_state.stacked_results = pd.DataFrame()st.session_state.scanned_batches = set()
+    st.session_state.stacked_results = pd.DataFrame()
+    st.session_state.scanned_batches = set()
     st.session_state.active_mode = "None"
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
