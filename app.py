@@ -6,6 +6,7 @@ import io
 import time
 import requests
 import numpy as np
+import plotly.graph_objects as go
 
 # Page Layout Configuration
 st.set_page_config(page_title="AI Market Confluence Scanner", layout="wide")
