@@ -228,10 +228,10 @@ def run_scanner(tickers, is_discovery=False):
             if is_discovery:
                 time.sleep(0.35)
             
-            except Exception as e:
-                pass
+        except Exception as e:
+            pass
         
-            progress_bar.progress((idx + 1) / len(tickers))
+        progress_bar.progress((idx + 1) / len(tickers))
     
     return pd.DataFrame(results)
 
