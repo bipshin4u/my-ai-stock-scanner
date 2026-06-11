@@ -20,20 +20,38 @@ if "scanned_batches" not in st.session_state:
 if "active_mode" not in st.session_state:
     st.session_state.active_mode = "None"
 
-# --- SIDEBAR WATCHLIST CONFIGURATIONS ---
-st.sidebar.header("📋 Scanner Control Panel")
+# --- GLOBAL MARKET SWITCHER & TICKER CONFIGURATIONS ---
+st.sidebar.header("🗺️ Market Selection & Control Panel")
+market_mode = st.sidebar.selectbox("Select Target Market", ["US Equities (NASDAQ/NYSE)", "Indian Equities (NSE)"])
 
-# Baseline configurations for all tiers
-b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS, XOM, CVX, LLY, UNH, V, MA, HD, PG, PFE, MRK, ABBV, KO, PEP, NKE, SBUX, GE, CAT, BA, HON, IBM, ACN, TXN, AMGN, GILD, BABA"
-b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, PATH, SNOW, NET, CRWD, OKTA, DDOG, ZS, FTNT, CHKP, MDB, DOCU, TWLO, PINS, SNAP, SHOP, SE, MELI, PDD, JD, BIDU, GME, AMC"
-b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH, RUN, CSIQ, GTLB, ALGM, AEHR, LSCC, POWI, SLAB, CRUS, COHR, LITE, FN, VRT, MOD, SYM, AOUT, JOBY, ACHR, LUNR, RKLB, BBAI, SOUN"
+# Define dynamic defaults based on selected market
+if market_mode == "US Equities (NASDAQ/NYSE)":
+    currency_char = "$"
+    default_watchlist = "AAPL, MSFT, NVDA, AMD, META, AMZN, GOOGL, TSLA, NFLX, AVGO"
+    b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS"
+    b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, PATH, SNOW, NET"
+    b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH"
+else:
+    currency_char = "₹"
+    # Bluechip & Midcap Indian tickers (Using .NS suffix for National Stock Exchange)
+    default_watchlist = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, TATAMOTORS, TATASTEEL, SBIN, BHARTIARTL, ITC"
+    b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, HINDUNILVR, ITC, SBIN, BHARTIARTL, LIC, AMBUJACEM, ASIANPAINT, AXISBANK, BAJAJ-AUTO, BAJAJFINSV, BAJFINANCE, BPCL, CIPLA, COALINDIA, DRREDDY, EICHERMOT, GRASIM, HCLTECH, HDFCLIFE, HEROMOTOCO"
+    b2_default = "HINDALCO, ICICIPRULI, INDUSINDBK, JSWSSTEEL, KOTAKBANK, LT, M&M, MARUTI, NESTLEIND, NTPC, ONGC, POWERGRID, SBILIFE, SUNPHARMA, TATACONSUM, TATAMOTORS, TATASTEEL, TECHM, TITAN, ULTRACEMCO, UPL, WIPRO, ADANIENT, ADANIPORTS, AVANTIFEED"
+    b3_default = "CAPLINPOINT, IRFC, SKYGOLD, TATAPOWER, TMCV, TMPV, CDSL, BSE, AngelOne, MUTHOOTFIN, MANAPPURAM, IREDA, RVNL, NHPC, SJVN, SUZLON, ZOMATO, NYKAA, POLICYBZR, PAYTM, AWL, JIOFIN"
 
 # User Custom entry list block
-default_watchlist = "AAPL, MSFT, NVDA, AMD, META, AMZN, GOOGL, TSLA, NFLX, AVGO"
-user_input = st.sidebar.text_area("✍️ Edit Custom Watchlist Tickers:", default_watchlist, height=100)
-watchlist = [t.strip().upper() for t in user_input.split(",") if t.strip()]
+user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
 
-# Advanced Sidebar configurations to let you customize discovery components on the fly
+# Automated formatting function to guarantee proper exchange suffixes
+def format_tickers(ticker_string, mode):
+    raw_list = [t.strip().upper() for t in ticker_string.split(",") if t.strip()]
+    if mode == "Indian Equities (NSE)":
+        # Automatically append .NS suffix if the user hasn't written it manually
+        return [f"{t}.NS" if not t.endswith(".NS") and not t.endswith(".BO") else t for t in raw_list]
+    return raw_list
+
+watchlist = format_tickers(user_input, market_mode)
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Edit Discovery Groups")
 with st.sidebar.expander("View / Edit Ticker Blocks"):
@@ -41,9 +59,9 @@ with st.sidebar.expander("View / Edit Ticker Blocks"):
     b2_input = st.text_area("Batch 2 Tickers:", b2_default, height=100)
     b3_input = st.text_area("Batch 3 Tickers:", b3_default, height=100)
 
-batch_1_list = [t.strip().upper() for t in b1_input.split(",") if t.strip()]
-batch_2_list = [t.strip().upper() for t in b2_input.split(",") if t.strip()]
-batch_3_list = [t.strip().upper() for t in b3_input.split(",") if t.strip()]
+batch_1_list = format_tickers(b1_input, market_mode)
+batch_2_list = format_tickers(b2_input, market_mode)
+batch_3_list = format_tickers(b3_input, market_mode)
 
 # --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
 def compute_native_ema(prices, length):
@@ -255,7 +273,9 @@ def display_master_leaderboard():
         st.info(f"📁 Current visible data layer: **{loaded_batches}**")
         
         st.markdown("---")
-        st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} EST")
+        # Inside display_master_leaderboard():
+        time_suffix = "IST" if market_mode == "Indian Equities (NSE)" else "EST"
+        st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} {time_suffix}")
         st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
         
         def color_whole_rows(row):
@@ -293,6 +313,20 @@ def display_master_leaderboard():
         )
     else:
         st.warning("Dashboard view screen empty. Click any scanning trigger on the sidebar panel menu to initiate analysis.")
+        
+# --- DYNAMIC POSITION SIZING & RISK DASHBOARD ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("💰 Risk & Sizing Calculator")
+
+# Currency selector for multi-market flexibility
+currency_symbol = st.sidebar.radio("Base Currency", ["USD ($)", "INR (₹)"], horizontal=True)
+currency_char = "$" if "USD" in currency_symbol else "₹"
+
+account_size = st.sidebar.number_input(f"Total Account Equity ({currency_char})", value=100000.0, step=1000.0)
+risk_pct = st.sidebar.slider("Max Risk Per Trade (%)", 0.1, 5.0, 1.0, 0.1)
+
+risk_allowance = account_size * (risk_pct / 100)
+st.sidebar.info(f"**Max Capital Risked Per Trade:** {currency_char}{risk_allowance:,.2f}")
 
 # --- UI SIDEBAR INTERACTION BUTTONS ---
 st.sidebar.markdown("---")
@@ -350,50 +384,48 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
 # --- ADVANCED CHARTING VISUALIZATION ENGINE ---
 def render_charting_layout():
     """
-    Renders an interactive layout chart for a selected ticker 
-    using native calculation arrays to prevent third-party crashes.
+    Renders an interactive Plotly layout chart for a selected ticker 
+    and calculates dynamic position sizing based on native ATR.
     """
     df_results = st.session_state.stacked_results
     
     if not df_results.empty:
         st.markdown("---")
-        st.subheader("📈 Charting Layout Indicator Workspace")
+        st.subheader("📈 Institutional Charting & Risk Workspace")
         
-        # 1. Clean dropdown picker populated dynamically from scanned tickers
         ticker_options = sorted(df_results['Ticker'].unique())
-        selected_ticker = st.selectbox("🎯 Select an analyzed stock to visualize chart layout:", ticker_options)
+        selected_ticker = st.selectbox("🎯 Select an analyzed stock to visualize:", ticker_options)
         
         if selected_ticker:
             with st.spinner(f"Generating indicator chart for {selected_ticker}..."):
-                # Fetch fresh chart history for the selected ticker
                 end_date = datetime.today().strftime('%Y-%m-%d')
                 start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
                 
-                # Re-download data using the established rate-limit bypass session structure
                 session = requests.Session()
-                session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+                session.headers.update({'User-Agent': 'Mozilla/5.0'})
                 df_stock = yf.download(selected_ticker, start=start_date, end=end_date, progress=False, session=session)
                 
                 if not df_stock.empty and len(df_stock) >= 200:
-                    # Clean the column headers exactly like the scanner engine
                     col_strings = [str(c).lower() for c in df_stock.columns]
-                    close_idx, high_idx, low_idx = -1, -1, -1
+                    open_idx, close_idx, high_idx, low_idx = -1, -1, -1, -1
+                    
                     for c_i, c_str in enumerate(col_strings):
+                        if 'open' in c_str: open_idx = c_i
                         if 'close' in c_str: close_idx = c_i
                         if 'high' in c_str: high_idx = c_i
                         if 'low' in c_str: low_idx = c_i
                     
+                    raw_open = df_stock.iloc[:, open_idx].values.flatten().astype('float64')
                     raw_close = df_stock.iloc[:, close_idx].values.flatten().astype('float64')
                     raw_high = df_stock.iloc[:, high_idx].values.flatten().astype('float64')
                     raw_low = df_stock.iloc[:, low_idx].values.flatten().astype('float64')
                     
-                    # Compute indicators natively to guarantee mathematical alignment
                     fast_ema = compute_native_ema(raw_close.copy(), 8)
                     slow_ema = compute_native_ema(raw_close.copy(), 21)
                     trend_ema = compute_native_ema(raw_close.copy(), 200)
                     atr_np = compute_native_atr(raw_high, raw_low, raw_close, length=14)
                     
-                    # Native SuperTrend logic band recreation
+                    # Native SuperTrend logic
                     src = (raw_high + raw_low) / 2
                     basic_ub = src + (2.5 * atr_np)
                     basic_lb = src - (2.5 * atr_np)
@@ -406,6 +438,7 @@ def render_charting_layout():
                         else: final_ub[i] = final_ub[i-1]
                         if basic_lb[i] > final_lb[i-1] or raw_close[i-1] < final_lb[i-1]: final_lb[i] = basic_lb[i]
                         else: final_lb[i] = final_lb[i-1]
+                        
                         if raw_close[i] > final_ub[i]: st_dir[i] = 1
                         elif raw_close[i] < final_lb[i]: st_dir[i] = -1
                         else:
@@ -413,25 +446,72 @@ def render_charting_layout():
                             if st_dir[i] == 1 and final_lb[i] < final_lb[i-1]: final_lb[i] = final_lb[i-1]
                             if st_dir[i] == -1 and final_ub[i] > final_ub[i-1]: final_ub[i] = final_ub[i-1]
                     
-                    # Isolate the final 90 days for clean, zoomed short-to-medium term visual clarity
                     chart_df = pd.DataFrame({
-                        'Close': raw_close, '8 EMA': fast_ema, '21 EMA': slow_ema, '200 EMA': trend_ema,
+                        'Open': raw_open, 'High': raw_high, 'Low': raw_low, 'Close': raw_close,
+                        '8 EMA': fast_ema, '21 EMA': slow_ema, '200 EMA': trend_ema,
                         'SuperTrend Upper': final_ub, 'SuperTrend Lower': final_lb, 'Direction': st_dir
                     }, index=df_stock.index).last('90D')
                     
-                    # Dynamic masking to generate clean plots
                     chart_df['Active SuperTrend'] = np.where(chart_df['Direction'] == 1, chart_df['SuperTrend Lower'], chart_df['SuperTrend Upper'])
                     
-                    # 2. Render responsive layout chart using native Streamlit line mapping tools
-                    st.line_chart(
-                        chart_df[['Close', '8 EMA', '21 EMA', '200 EMA', 'Active SuperTrend']],
-                        y=['Close', '8 EMA', '21 EMA', '200 EMA', 'Active SuperTrend'],
-                        color=['#ffffff', '#00d1ff', '#ffb800', '#ff0055', '#00ff66']
+                    # -- PLOTLY CANDLESTICK INTEGRATION --
+                    fig = go.Figure()
+                    
+                    # Candlesticks
+                    fig.add_trace(go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'], 
+                                                 low=chart_df['Low'], close=chart_df['Close'], name='Price',
+                                                 increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
+                    
+                    # EMAs
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['8 EMA'], mode='lines', name='8 EMA', line=dict(color='#00d1ff', width=1.5)))
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['21 EMA'], mode='lines', name='21 EMA', line=dict(color='#ffb800', width=1.5)))
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['200 EMA'], mode='lines', name='200 EMA', line=dict(color='#ff0055', width=2)))
+                    
+                    # Dynamic SuperTrend Color Split
+                    bullish_st = chart_df['Active SuperTrend'].where(chart_df['Direction'] == 1)
+                    bearish_st = chart_df['Active SuperTrend'].where(chart_df['Direction'] == -1)
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=bullish_st, mode='lines', name='ST Bull Support', line=dict(color='#00ff66', width=2, dash='dot')))
+                    fig.add_trace(go.Scatter(x=chart_df.index, y=bearish_st, mode='lines', name='ST Bear Res', line=dict(color='#ff3333', width=2, dash='dot')))
+
+                    fig.update_layout(
+                        template='plotly_dark',
+                        margin=dict(l=20, r=20, t=20, b=20),
+                        height=550,
+                        xaxis_rangeslider_visible=False,
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                     )
-                    st.caption("📈 Color Guide: White (Price), Light Blue (8 EMA), Orange (21 EMA), Crimson (200 Bear/Bull Boundary Line), Green/Red (SuperTrend Trailing Stop Floor).")
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # -- DYNAMIC POSITION SIZING EXECUTION --
+                    current_price = chart_df['Close'].iloc[-1]
+                    current_st_stop = chart_df['Active SuperTrend'].iloc[-1]
+                    current_dir = chart_df['Direction'].iloc[-1]
+                    
+                    st.markdown("### 🧮 Live Position Sizing")
+                    risk_dist = abs(current_price - current_st_stop)
+                    
+                    if risk_dist > 0:
+                        position_size_shares = int(risk_allowance / risk_dist)
+                        capital_required = position_size_shares * current_price
+                        
+                        sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
+                        # Inside the position sizing metric card layout section of render_charting_layout():
+                        sz_col1.metric("Current Entry Price", f"{currency_char}{current_price:.2f}")
+                        sz_col2.metric("SuperTrend Stop Loss", f"{currency_char}{current_st_stop:.2f}")
+                        sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
+                        
+                        # Capital allocation warning
+                        if capital_required > account_size:
+                            sz_col4.error(f"⚠️ Insufficient Buying Power")
+                        else:
+                            sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
+                    else:
+                        st.warning("Risk distance is zero. Wait for valid volatility expansion.")
+                        
                 else:
                     st.error("Insufficient historical trading volume data found to map structural trend chart.")
-
+                    
 # --- APPLICATION FOOTPRINT MAP CHANGER ---
 # Append the chart draw call to sit directly under your dashboard leaderboard drawer 
 display_master_leaderboard()
