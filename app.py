@@ -27,20 +27,26 @@ st.sidebar.header("🗺️ Market Selection & Control Panel")
 # Automated Web Scraper for Live Index Tickers
 @st.cache_data(ttl=86400)  # Cache the data for 24 hours
 def fetch_live_index(url, column_name):
-    """Scrapes Wikipedia for live index constituents using a browser disguise."""
+    """Scrapes Wikipedia for live index constituents."""
     try:
-        # Put on our Google Chrome disguise so Wikipedia doesn't block us
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers)
+        # Polite User-Agent
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(url, headers=headers, timeout=10)
         
-        # Now read the tables from our successful request
-        tables = pd.read_html(response.text)
+        # Pandas 2.0+ requires text to be wrapped in StringIO
+        import io
+        tables = pd.read_html(io.StringIO(response.text))
+        
         for df in tables:
             if column_name in df.columns:
                 symbols = df[column_name].astype(str).str.replace('.', '-', regex=False).tolist()
                 return symbols
+        
+        st.sidebar.error(f"Could not find a column named '{column_name}' on Wikipedia.")
         return []
     except Exception as e:
+        # If it fails, print the EXACT error to the sidebar so we can see it!
+        st.sidebar.error(f"Scraper Error: {e}")
         return []
 
 market_mode = st.sidebar.selectbox("Select Target Market", ["US Equities (NASDAQ/NYSE)", "Indian Equities (NSE)"])
