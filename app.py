@@ -653,9 +653,15 @@ def render_charting_layout():
     st.plotly_chart(fig, use_container_width=True)
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
-    current_price = chart_df['Close'].iloc[-1]
-    current_st_stop = chart_df['Active SuperTrend'].iloc[-1]
-    current_dir = chart_df['Direction'].iloc[-1]
+    # Pulling directly from our new native NumPy arrays instead of a DataFrame
+    current_price = raw_close[-1]
+    current_dir = st_dir[-1]
+
+    # Determine the active stop loss based on current trend direction
+    if current_dir == 1:
+        current_st_stop = f_lb[-1]  # Bullish trend -> Stop is the lower band
+    else:
+        current_st_stop = f_ub[-1]  # Bearish trend -> Stop is the upper band
 
     st.markdown("### 🧮 Live Position Sizing")
     risk_dist = abs(current_price - current_st_stop)
@@ -665,16 +671,17 @@ def render_charting_layout():
         capital_required = position_size_shares * current_price
 
         sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
-        # Inside the position sizing metric card layout section of render_charting_layout():
-        sz_col1.metric("Current Entry Price", f"{currency_char}{current_price:.2f}")
-        sz_col2.metric("SuperTrend Stop Loss", f"{currency_char}{current_st_stop:.2f}")
+        
+        # (Assuming you still have currency_char defined above, otherwise you can hardcode "$" or "₹")
+        sz_col1.metric("Current Entry Price", f"{current_price:,.2f}")
+        sz_col2.metric("SuperTrend Stop Loss", f"{current_st_stop:,.2f}")
         sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
 
         # Capital allocation warning
         if capital_required > account_equity:
             sz_col4.error(f"⚠️ Insufficient Buying Power")
         else:
-            sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
+            sz_col4.metric("Capital Allocated", f"{capital_required:,.2f}")
     else:
         st.warning("Risk distance is zero. Wait for valid volatility expansion.")
                     
