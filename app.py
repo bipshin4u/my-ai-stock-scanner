@@ -128,7 +128,8 @@ def format_tickers(ticker_string, mode):
 # ==============================================================================
 # --- SIDEBAR UI: WATCHLISTS & CALCULATORS ---
 # ==============================================================================
-#st.sidebar.markdown("---")
+
+st.sidebar.markdown("---")
 
 # 1. The Custom Watchlist Text Area (Always visible for quick access)
 user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
@@ -160,7 +161,7 @@ with st.sidebar.expander("💰 Risk & Sizing Calculator", expanded=False):
     
     st.info(f"**Max Capital Risked Per Trade:**\n\n{curr_symbol}{max_risk_amount:,.2f}")
 
-st.sidebar.markdown("---")
+#st.sidebar.markdown("---")
 # ==============================================================================
 
 # --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
