@@ -28,43 +28,25 @@ watchlist = [t.strip().upper() for t in user_input.split(",") if t.strip()]
 @st.cache_data(ttl=86400)
 def fetch_live_index_tickers():
     """
-    Scrapes highly isolated, dedicated Wikipedia tables 
-    to completely avoid HTML text/script scraping bugs.
+    Fetches raw developer-JSON index datasets from open financial repos
+    to permanently bypass HTML text-parsing wall errors and 403 blocks.
     """
     import urllib.request
-    
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    import json
     
     try:
-        # 1. Scrape S&P 500 cleanly using the definitive index link
-        sp500_url = "https://wikipedia.org"
-        req_sp = urllib.request.Request(sp500_url, headers=headers)
-        with urllib.request.urlopen(req_sp) as response:
-            sp500_table = pd.read_html(response.read())[0] # Explicitly lock table index 0
-        sp500_tickers = sp500_table['Symbol'].str.replace('.', '-', regex=False).tolist()
+        # 1. Fetch S&P 500 Tickers via clean financial data repo
+        sp500_url = "https://githubusercontent.com"
+        with urllib.request.urlopen(sp500_url) as url:
+            sp500_data = json.loads(url.read().decode())
+        sp500_tickers = [item['Symbol'].replace('.', '-') for item in sp500_data]
 
-        # 2. Scrape Nasdaq 100 via its cleaner dedicated component page URL
-        ndx_url = "https://wikipedia.org"
-        req_ndx = urllib.request.Request(ndx_url, headers=headers)
-        with urllib.request.urlopen(req_ndx) as response:
-            ndx_tables = pd.read_html(response.read())
-            
-        # Target the explicit components matrix list cleanly
-        ndx_df = None
-        for table in ndx_tables:
-            if 'Ticker' in table.columns:
-                ndx_df = table
-                break
-            elif 'Symbol' in table.columns:
-                ndx_df = table
-                break
-        
-        # If no table caught, use index 4 which is the structural default block
-        if ndx_df is None:
-            ndx_df = ndx_tables[4]
-            
-        ticker_col = 'Ticker' if 'Ticker' in ndx_df.columns else 'Symbol'
-        ndx_tickers = ndx_df[ticker_col].str.replace('.', '-', regex=False).tolist()
+        # 2. Fetch Nasdaq 100 Tickers via clean benzinga listing dataset repo
+        ndx_url = "https://githubusercontent.com"
+        with urllib.request.urlopen(ndx_url) as url:
+            ndx_data = json.loads(url.read().decode())
+        # The list is a simple list of string tickers
+        ndx_tickers = [ticker.replace('.', '-') for ticker in ndx_data]
         
         return sp500_tickers, ndx_tickers
     except Exception as e:
