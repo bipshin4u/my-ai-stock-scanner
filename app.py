@@ -190,14 +190,6 @@ def run_scanner(tickers, is_discovery=False):
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    # Instead of a normal requests session, use a cached database
-    import requests_cache
-
-    # This creates a tiny database file that remembers stock prices for 12 hours
-    session = requests_cache.CachedSession('yfinance.cache', expire_after=43200)
-    session.headers.update({'User-Agent': 'Mozilla/5.0'})
-    # Now when you call yf.download(..., session=session), 
-    # it won't trigger Yahoo's alarms if you recently downloaded it!
 
     progress_bar = st.progress(0)
     
@@ -208,7 +200,7 @@ def run_scanner(tickers, is_discovery=False):
             df = pd.DataFrame()
             
             for attempt in range(max_attempts):
-                df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
+                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
                 
                 # If we successfully got data, break out of the retry loop
                 if not df.empty and len(df) > 0:
@@ -415,7 +407,7 @@ if st.sidebar.button("🚀 Run Custom Watchlist Scan"):
         st.session_state.active_mode = "Custom Watchlist"
         res_df = run_scanner(watchlist, is_discovery=False)
         st.session_state.stacked_results = res_df
-        #st.rerun()
+        st.rerun()
 
 if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
     with st.spinner("Processing Ranks 1-50..."):
@@ -426,7 +418,7 @@ if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
         df1 = run_scanner(batch_1_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df1], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 1 (Mega)")
-        #st.rerun()
+        st.rerun()
 
 if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
     with st.spinner("Processing Ranks 51-100..."):
@@ -437,7 +429,7 @@ if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
         df2 = run_scanner(batch_2_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df2], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 2 (Large)")
-        #st.rerun()
+        st.rerun()
 
 if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
     with st.spinner("Processing Ranks 101-150..."):
@@ -448,7 +440,7 @@ if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
         df3 = run_scanner(batch_3_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df3], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 3 (Mid/Small)")
-        #st.rerun()
+        st.rerun()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
@@ -480,7 +472,7 @@ def render_charting_layout():
                 
                 session = requests.Session()
                 session.headers.update({'User-Agent': 'Mozilla/5.0'})
-                df_stock = yf.download(selected_ticker, start=start_date, end=end_date, progress=False, session=session)
+                df_stock = yf.download(selected_ticker, start=start_date, end=end_date, progress=False)
                 
                 if not df_stock.empty and len(df_stock) >= 200:
                     col_strings = [str(c).lower() for c in df_stock.columns]
