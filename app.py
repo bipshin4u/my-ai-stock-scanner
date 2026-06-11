@@ -23,39 +23,72 @@ if "active_mode" not in st.session_state:
 
 # --- GLOBAL MARKET SWITCHER & TICKER CONFIGURATIONS ---
 st.sidebar.header("🗺️ Market Selection & Control Panel")
+
+# Automated Web Scraper for Live Index Tickers
+@st.cache_data(ttl=86400)  # Cache the data for 24 hours so it doesn't scrape on every click
+def fetch_live_index(url, column_name):
+    """Scrapes Wikipedia for live index constituents."""
+    try:
+        tables = pd.read_html(url)
+        for df in tables:
+            if column_name in df.columns:
+                # Grab symbols and clean them up (Yahoo uses dashes instead of dots for US stocks like BRK.B)
+                symbols = df[column_name].astype(str).str.replace('.', '-', regex=False).tolist()
+                return symbols
+        return []
+    except:
+        return []
+
 market_mode = st.sidebar.selectbox("Select Target Market", ["US Equities (NASDAQ/NYSE)", "Indian Equities (NSE)"])
 
-# Define dynamic defaults based on selected market
 if market_mode == "US Equities (NASDAQ/NYSE)":
     currency_char = "$"
-    default_watchlist = "AAPL, MSFT, NVDA, AMD, META, AMZN, GOOGL, TSLA, NFLX, AVGO"
-    b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, AMD, PLTR, NFLX, AVGO, SMCI, COIN, ORCL, CRM, QCOM, INTC, MU, PANW, MRVL, JPM, BAC, WMT, COST, DIS"
-    b2_default = "UBER, ABNB, PYPL, SOFI, DKNG, HOOD, AFRM, RIVN, LCID, NIO, XPEV, LI, F, GM, TM, T, VZ, CMCSA, WBD, SPOT, RBLX, U, PATH, SNOW, NET"
-    b3_default = "CELH, ELF, DUOL, IOT, MSTR, UPST, HIMS, ASTS, CLSK, MARA, RIOT, WULF, IREN, CIFR, CORZ, APPS, PTON, ROKU, CVNA, CHWY, FSLR, ENPH"
+    # Dynamically fetch the S&P 500 and split it into batches
+    sp500_live = fetch_live_index('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies', 'Symbol')
+    
+    if sp500_live:
+        b1_default = ", ".join(sp500_live[:50])       # Top 50
+        b2_default = ", ".join(sp500_live[50:100])    # Next 50
+        b3_default = ", ".join(sp500_live[100:150])   # Next 50
+    else:
+        # Fallback just in case Wikipedia is down
+        b1_default = "AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA" 
+        b2_default = ""
+        b3_default = ""
+        
+    default_watchlist = "AAPL, MSFT, NVDA, AMD, META, AMZN, GOOGL, TSLA"
+
 else:
     currency_char = "₹"
-    # Bluechip & Midcap Indian tickers (Using .NS suffix for National Stock Exchange)
-    default_watchlist = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, TATAMOTORS, TATASTEEL, SBIN, BHARTIARTL, ITC"
-    b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK, HINDUNILVR, ITC, SBIN, BHARTIARTL, LIC, AMBUJACEM, ASIANPAINT, AXISBANK, BAJAJ-AUTO, BAJAJFINSV, BAJFINANCE, BPCL, CIPLA, COALINDIA, DRREDDY, EICHERMOT, GRASIM, HCLTECH, HDFCLIFE, HEROMOTOCO"
-    b2_default = "HINDALCO, ICICIPRULI, INDUSINDBK, JSWSSTEEL, KOTAKBANK, LT, M&M, MARUTI, NESTLEIND, NTPC, ONGC, POWERGRID, SBILIFE, SUNPHARMA, TATACONSUM, TATAMOTORS, TATASTEEL, TECHM, TITAN, ULTRACEMCO, UPL, WIPRO, ADANIENT, ADANIPORTS, AVANTIFEED"
-    b3_default = "CAPLINPOINT, IRFC, SKYGOLD, TATAPOWER, TMCV, TMPV, CDSL, BSE, AngelOne, MUTHOOTFIN, MANAPPURAM, IREDA, RVNL, NHPC, SJVN, SUZLON, ZOMATO, NYKAA, POLICYBZR, PAYTM, AWL, JIOFIN"
+    # Dynamically fetch the Nifty 50 and Nifty Next 50
+    nifty50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_50', 'Symbol')
+    niftynext50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_Next_50', 'Symbol')
+    
+    if nifty50_live:
+        b1_default = ", ".join(nifty50_live[:25])         # First half of Nifty 50
+        b2_default = ", ".join(nifty50_live[25:])         # Second half of Nifty 50
+        b3_default = ", ".join(niftynext50_live[:50])     # Nifty Next 50
+    else:
+        b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK"
+        b2_default = ""
+        b3_default = ""
 
-# User Custom entry list block
-user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
+    default_watchlist = "RELIANCE, TCS, INFY, HDFCBANK, TATAMOTORS, ZOMATO"
 
 # Automated formatting function to guarantee proper exchange suffixes
 def format_tickers(ticker_string, mode):
     raw_list = [t.strip().upper() for t in ticker_string.split(",") if t.strip()]
     if mode == "Indian Equities (NSE)":
-        # Automatically append .NS suffix if the user hasn't written it manually
         return [f"{t}.NS" if not t.endswith(".NS") and not t.endswith(".BO") else t for t in raw_list]
     return raw_list
 
+user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
 watchlist = format_tickers(user_input, market_mode)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Edit Discovery Groups")
 with st.sidebar.expander("View / Edit Ticker Blocks"):
+    st.caption("💡 These lists are now automatically pulled from live S&P 500 and Nifty 50 index data!")
     b1_input = st.text_area("Batch 1 Tickers:", b1_default, height=100)
     b2_input = st.text_area("Batch 2 Tickers:", b2_default, height=100)
     b3_input = st.text_area("Batch 3 Tickers:", b3_default, height=100)
@@ -245,7 +278,7 @@ def run_scanner(tickers, is_discovery=False):
             })
 
             if is_discovery:
-                time.sleep(0.35)
+                time.sleep(1.0)
 
         except Exception as e:
             pass
@@ -482,7 +515,7 @@ def render_charting_layout():
                         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, width="stretch")
 
                     # -- DYNAMIC POSITION SIZING EXECUTION --
                     current_price = chart_df['Close'].iloc[-1]
