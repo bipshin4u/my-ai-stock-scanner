@@ -1,0 +1,8 @@
+text
+
+streamlit
+pandas
+pandas_ta
+yfinance
+openpyxl
+numpy
