@@ -450,7 +450,7 @@ def render_charting_layout():
                         'Open': raw_open, 'High': raw_high, 'Low': raw_low, 'Close': raw_close,
                         '8 EMA': fast_ema, '21 EMA': slow_ema, '200 EMA': trend_ema,
                         'SuperTrend Upper': final_ub, 'SuperTrend Lower': final_lb, 'Direction': st_dir
-                    }, index=df_stock.index).last('90D')
+                    }, index=df_stock.index).tail(90)
                     
                     chart_df['Active SuperTrend'] = np.where(chart_df['Direction'] == 1, chart_df['SuperTrend Lower'], chart_df['SuperTrend Upper'])
                     
