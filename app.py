@@ -58,25 +58,35 @@ def run_scanner(tickers, is_discovery=False):
     
     for idx, ticker in enumerate(tickers):
         try:
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False)
+            # --- FIXED: multi_level_index=False ensures a flat table structure for all tickers ---
+            df = yf.download(ticker, start=start_date, end=end_date, progress=False, multi_level_index=False)
+            
             if df.empty or len(df) < trend_ema_len:
                 continue
+                
+            # Flatten multi-index columns if they manage to sneak through the API
             if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.droplevel(1)
+                df.columns = df.columns.get_level_values(0)
 
-            close_series = pd.Series(df['Close'])
+            # Extract the raw series data cleanly
+            close_series = pd.Series(df['Close'].values, index=df.index)
+            high_series = pd.Series(df['High'].values, index=df.index)
+            low_series = pd.Series(df['Low'].values, index=df.index)
+
+            # Compute technical analysis indicators
             fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
             slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
             trend_ema = ta.ema(close_series, length=trend_ema_len).to_numpy()
             rsi = ta.rsi(close_series, length=rsi_len).to_numpy()
             
-            st_df = ta.supertrend(df['High'], df['Low'], df['Close'], length=st_period, multiplier=st_multiplier)
+            st_df = ta.supertrend(high_series, low_series, close_series, length=st_period, multiplier=st_multiplier)
             st_dir = st_df.iloc[:, 1].fillna(0).to_numpy()
             
-            atr = ta.atr(df['High'], df['Low'], df['Close'], length=regime_len)
+            atr = ta.atr(high_series, low_series, close_series, length=regime_len)
             std_dev = close_series.rolling(regime_len).std()
             market_volatility = (std_dev / atr).fillna(1.0).to_numpy()
 
+            # Strategy Alignment Evaluation Rules
             is_trending = market_volatility[-1] > regime_threshold
             ema_buy_trigger = fast_ema[-1] > slow_ema[-1] and fast_ema[-2] <= slow_ema[-2]
             ema_sell_trigger = fast_ema[-1] < slow_ema[-1] and fast_ema[-2] >= slow_ema[-2]
@@ -88,6 +98,7 @@ def run_scanner(tickers, is_discovery=False):
             rsi_bullish_div = rsi[-1] > rsi[-2] and close_series.iloc[-1] <= close_series.iloc[-2] and rsi[-1] < rsi_upper
             rsi_bearish_div = rsi[-1] < rsi[-2] and close_series.iloc[-1] >= close_series.iloc[-2] and rsi[-1] > rsi_lower
 
+            # Scoring Math compiler
             buy_score = 0
             sell_score = 0
             if above_macro_trend: buy_score += 1
@@ -116,8 +127,9 @@ def run_scanner(tickers, is_discovery=False):
             if is_discovery:
                 time.sleep(0.10)
                 
-        except:
+        except Exception as scan_err:
             pass
+            
         progress_bar.progress((idx + 1) / len(tickers))
         
     return pd.DataFrame(results)
