@@ -70,15 +70,25 @@ if market_mode == "US Equities (NASDAQ/NYSE)":
 
 else:
     currency_char = "₹"
-    # Dynamically fetch the Nifty 50, Nifty Next 50, and Nifty Midcap 50
+    # Dynamically fetch Nifty 50 and Nifty Next 50 (These work perfectly!)
     nifty50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_50', 'Symbol')
     niftynext50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_Next_50', 'Symbol')
-    niftymidcap50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_Midcap_50', 'Symbol')
+    
+    # Wikipedia doesn't have a Midcap 50 table, so we supply a robust, static list of top mid-caps
+    midcap_50_static = [
+        "AUBANK", "ASHOKLEY", "ASTRAL", "AUROPHARMA", "BALKRISIND", "BANDHANBNK", "BANKINDIA", 
+        "BATAINDIA", "BHARATFORG", "BHEL", "BIOCON", "CANBK", "CHOLAFIN", "COFORGE", "CONCOR", 
+        "COROMANDEL", "CROMPTON", "CUMMINSIND", "DEEPAKNTR", "DIXON", "ESCORTS", "FEDERALBNK", 
+        "FORTIS", "GODREJPROP", "HAL", "HINDPETRO", "IDEA", "IDFCFIRSTB", "IGL", "INDHOTEL", 
+        "INDUSTOWER", "JSWENERGY", "JUBLFOOD", "LALPATHLAB", "LAURUSLABS", "LICHSGFIN", 
+        "MAXHEALTH", "MFSL", "MPHASIS", "MRF", "MUTHOOTFIN", "NAVINFLUOR", "PAGEIND", "PEL", 
+        "PERSISTENT", "PETRONET", "PIIND", "POLYCAB", "PRESTIGE", "REC"
+    ]
     
     if nifty50_live:
         b1_default = ", ".join(nifty50_live)              # All 50 of Nifty 50
         b2_default = ", ".join(niftynext50_live)          # All 50 of Nifty Next 50
-        b3_default = ", ".join(niftymidcap50_live)        # All 50 of Nifty Midcap 50
+        b3_default = ", ".join(midcap_50_static)          # 50 Institutional Midcaps
     else:
         b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK"
         b2_default = ""
