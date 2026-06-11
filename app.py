@@ -415,7 +415,7 @@ if st.sidebar.button("🚀 Run Custom Watchlist Scan"):
         st.session_state.active_mode = "Custom Watchlist"
         res_df = run_scanner(watchlist, is_discovery=False)
         st.session_state.stacked_results = res_df
-        st.rerun()
+        #st.rerun()
 
 if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
     with st.spinner("Processing Ranks 1-50..."):
@@ -426,7 +426,7 @@ if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
         df1 = run_scanner(batch_1_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df1], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 1 (Mega)")
-        st.rerun()
+        #st.rerun()
 
 if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
     with st.spinner("Processing Ranks 51-100..."):
@@ -437,7 +437,7 @@ if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
         df2 = run_scanner(batch_2_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df2], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 2 (Large)")
-        st.rerun()
+        #st.rerun()
 
 if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
     with st.spinner("Processing Ranks 101-150..."):
@@ -448,7 +448,7 @@ if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
         df3 = run_scanner(batch_3_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df3], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 3 (Mid/Small)")
-        st.rerun()
+        #st.rerun()
 
 st.sidebar.markdown("---")
 if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
