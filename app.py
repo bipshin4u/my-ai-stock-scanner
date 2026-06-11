@@ -650,7 +650,7 @@ def render_charting_layout():
     fig.add_trace(go.Scatter(x=dates, y=vol_sma, line=dict(width=1.2), name="20 Vol SMA"), row=2, col=1)
 
     fig.update_layout(xaxis_rangeslider_visible=False, height=650, margin=dict(l=10, r=10, t=20, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
     # Pulling directly from our new native NumPy arrays instead of a DataFrame
