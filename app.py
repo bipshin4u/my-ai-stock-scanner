@@ -96,27 +96,34 @@ else:
 
     default_watchlist = "RELIANCE, TCS, INFY, HDFCBANK, TATAMOTORS, ZOMATO"
 
-# Automated formatting function to guarantee proper exchange suffixes
+# Automated formatting function with a built-in Yahoo Translator
 def format_tickers(ticker_string, mode):
     raw_list = [t.strip().upper() for t in ticker_string.split(",") if t.strip()]
+    
+    # 💡 The "Translation Dictionary" for Yahoo's weird database quirks
+    yahoo_corrections = {
+        "UNIONBK": "UNIONBANK",
+        "REC": "RECLTD",
+        "PEL": "PEL-EQ", # Yahoo occasionally alters Piramal's mapping
+        "CAPLINPOINT": "CAPLIPOINT"
+    }
+    
+    corrected_list = []
+    for t in raw_list:
+        # Temporarily remove .NS if it was already typed, so we can check the base name
+        clean_name = t.replace(".NS", "")
+        
+        # If the base name is in our dictionary, swap it out for the Yahoo version
+        if clean_name in yahoo_corrections:
+            corrected_list.append(yahoo_corrections[clean_name])
+        else:
+            corrected_list.append(clean_name)
+            
+    # Re-attach the appropriate market suffix
     if mode == "Indian Equities (NSE)":
-        return [f"{t}.NS" if not t.endswith(".NS") and not t.endswith(".BO") else t for t in raw_list]
-    return raw_list
-
-user_input = st.sidebar.text_area(f"✍️ Edit Custom Watchlist Tickers ({market_mode}):", default_watchlist, height=100)
-watchlist = format_tickers(user_input, market_mode)
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("⚙️ Edit Discovery Groups")
-with st.sidebar.expander("View / Edit Ticker Blocks"):
-    st.caption("💡 These lists are now automatically pulled from live S&P 500 and Nifty 50 index data!")
-    b1_input = st.text_area("Batch 1 Tickers:", b1_default, height=100)
-    b2_input = st.text_area("Batch 2 Tickers:", b2_default, height=100)
-    b3_input = st.text_area("Batch 3 Tickers:", b3_default, height=100)
-
-batch_1_list = format_tickers(b1_input, market_mode)
-batch_2_list = format_tickers(b2_input, market_mode)
-batch_3_list = format_tickers(b3_input, market_mode)
+        return [f"{t}.NS" if not t.endswith(".BO") else t for t in corrected_list]
+        
+    return corrected_list
 
 # --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
 def compute_native_ema(prices, length):
