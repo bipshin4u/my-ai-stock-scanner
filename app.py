@@ -46,6 +46,7 @@ batch_3_list = [t.strip().upper() for t in b3_input.split(",") if t.strip()]
 
 def run_scanner(tickers, is_discovery=False):
     import requests
+    import numpy as np
     
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
@@ -68,13 +69,13 @@ def run_scanner(tickers, is_discovery=False):
     
     for idx, ticker in enumerate(tickers):
         try:
-            # 1. Download data with standard auto-flattening parameters (No group_by keyword)
+            # 1. Download data with standard parameters
             df = yf.download(ticker, start=start_date, end=end_date, progress=False, session=session)
             
             if df.empty or len(df) < trend_ema_len:
                 continue
                 
-            # 2. Clean MultiIndex structures if yfinance returns multi-level headers
+            # 2. Flatten MultiIndex column structures cleanly
             if isinstance(df.columns, pd.MultiIndex):
                 if ticker in df.columns.get_level_values(0):
                     df = df[[ticker]].copy()
@@ -84,13 +85,12 @@ def run_scanner(tickers, is_discovery=False):
                 else:
                     df.columns = df.columns.get_level_values(0)
             
-            # Standardize and clean text headers
             df.columns = [str(c).strip().capitalize() for c in df.columns]
             
             if 'Close' not in df.columns:
                 continue
 
-            # 3. Flatten values using a robust index patch to clear out row length errors
+            # 3. Format clean flat pandas series maps
             raw_close = df['Close'].values.flatten().astype('float64')
             raw_high = df['High'].values.flatten().astype('float64')
             raw_low = df['Low'].values.flatten().astype('float64')
@@ -100,16 +100,52 @@ def run_scanner(tickers, is_discovery=False):
             high_series = pd.Series(raw_high, index=flat_index)
             low_series = pd.Series(raw_low, index=flat_index)
 
-            # Compute technical analysis indicators safely using the flat arrays
+            # 4. Compute core EMAs and RSI
             fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
             slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
             trend_ema = ta.ema(close_series, length=trend_ema_len).to_numpy()
             rsi = ta.rsi(close_series, length=rsi_len).to_numpy()
             
-            st_df = ta.supertrend(high_series, low_series, close_series, length=st_period, multiplier=st_multiplier)
-            st_dir = st_df.iloc[:, 1].fillna(0).to_numpy()
-            
             atr = ta.atr(high_series, low_series, close_series, length=regime_len)
+            atr_np = atr.to_numpy()
+            
+            # --- INSTITUTIONAL PATCH: NATIVE MATHEMATICAL SUPERTREND ENGINE ---
+            # Calculates the pure true ATR bands to find definitive trend directions 
+            # without utilizing unstable third-party parsing functions.
+            src = (raw_high + raw_low) / 2
+            basic_ub = src + (st_multiplier * atr_np)
+            basic_lb = src - (st_multiplier * atr_np)
+            
+            final_ub = np.zeros(len(df))
+            final_lb = np.zeros(len(df))
+            st_dir_array = np.zeros(len(df))
+            
+            for i in range(1, len(df)):
+                # Upper Band Calculation
+                if basic_ub[i] < final_ub[i-1] or raw_close[i-1] > final_ub[i-1]:
+                    final_ub[i] = basic_ub[i]
+                else:
+                    final_ub[i] = final_ub[i-1]
+                    
+                # Lower Band Calculation
+                if basic_lb[i] > final_lb[i-1] or raw_close[i-1] < final_lb[i-1]:
+                    final_lb[i] = basic_lb[i]
+                else:
+                    final_lb[i] = final_lb[i-1]
+                    
+                # Direction Definition Gate
+                if raw_close[i] > final_ub[i]:
+                    st_dir_array[i] = 1
+                elif raw_close[i] < final_lb[i]:
+                    st_dir_array[i] = -1
+                else:
+                    st_dir_array[i] = st_dir_array[i-1]
+                    if st_dir_array[i] == 1 and final_lb[i] < final_lb[i-1]:
+                        final_lb[i] = final_lb[i-1]
+                    if st_dir_array[i] == -1 and final_ub[i] > final_ub[i-1]:
+                        final_ub[i] = final_ub[i-1]
+            # ------------------------------------------------------------------
+            
             std_dev = close_series.rolling(regime_len).std()
             market_volatility = (std_dev / atr).fillna(1.0).to_numpy()
 
@@ -119,8 +155,8 @@ def run_scanner(tickers, is_discovery=False):
             ema_sell_trigger = fast_ema[-1] < slow_ema[-1] and fast_ema[-2] >= slow_ema[-2]
             above_macro_trend = close_series.iloc[-1] > trend_ema[-1]
             
-            st_bullish = st_dir[-1] == 1 if is_trending else True
-            st_bearish = st_dir[-1] == -1 if is_trending else True
+            st_bullish = st_dir_array[-1] == 1 if is_trending else True
+            st_bearish = st_dir_array[-1] == -1 if is_trending else True
 
             rsi_bullish_div = rsi[-1] > rsi[-2] and close_series.iloc[-1] <= close_series.iloc[-2] and rsi[-1] < rsi_upper
             rsi_bearish_div = rsi[-1] < rsi[-2] and close_series.iloc[-1] >= close_series.iloc[-2] and rsi[-1] > rsi_lower
@@ -152,7 +188,7 @@ def run_scanner(tickers, is_discovery=False):
             })
             
             if is_discovery:
-                time.sleep(0.35) # Safe padding to stay completely undetected by firewalls
+                time.sleep(0.35)
                 
         except Exception as scan_err:
             pass
