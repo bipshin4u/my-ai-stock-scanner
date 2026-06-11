@@ -287,7 +287,7 @@ def display_master_leaderboard():
         display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
         styled_df = display_df.style.apply(color_whole_rows, axis=1)
         
-        # --- MODIFIED BLOCK FOR INTERACTIVE CLICK-SORTING ---
+        # ACTIVE INTERACTIVE CLICK-SORTING COMPONENT
         st.dataframe(
             styled_df, 
             width="stretch", 
@@ -299,7 +299,6 @@ def display_master_leaderboard():
                 "Action Signal": st.column_config.TextColumn("Action Signal", help="Click to group actions together")
             }
         )
-        # --- END OF MODIFIED BLOCK ---
         
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
