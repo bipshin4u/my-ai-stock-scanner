@@ -70,14 +70,15 @@ if market_mode == "US Equities (NASDAQ/NYSE)":
 
 else:
     currency_char = "₹"
-    # Dynamically fetch the Nifty 50 and Nifty Next 50
+    # Dynamically fetch the Nifty 50, Nifty Next 50, and Nifty Midcap 50
     nifty50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_50', 'Symbol')
     niftynext50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_Next_50', 'Symbol')
+    niftymidcap50_live = fetch_live_index('https://en.wikipedia.org/wiki/NIFTY_Midcap_50', 'Symbol')
     
     if nifty50_live:
-        b1_default = ", ".join(nifty50_live[:25])         # First half of Nifty 50
-        b2_default = ", ".join(nifty50_live[25:])         # Second half of Nifty 50
-        b3_default = ", ".join(niftynext50_live[:50])     # Nifty Next 50
+        b1_default = ", ".join(nifty50_live)              # All 50 of Nifty 50
+        b2_default = ", ".join(niftynext50_live)          # All 50 of Nifty Next 50
+        b3_default = ", ".join(niftymidcap50_live)        # All 50 of Nifty Midcap 50
     else:
         b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK"
         b2_default = ""
