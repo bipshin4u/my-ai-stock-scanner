@@ -82,6 +82,12 @@ def run_scanner(tickers, is_discovery=False):
             high_series = pd.Series(df['High'].values.flatten(), index=df.index)
             low_series = pd.Series(df['Low'].values.flatten(), index=df.index)
 
+            # --- ADD THESE 3 LINES: Force conversion to classic floats to fix indicator errors ---
+            close_series = close_series.astype('float64')
+            high_series = high_series.astype('float64')
+            low_series = low_series.astype('float64')
+            # -------------------------------------------------------------------------------------
+            
             # Compute technical analysis indicators safely using the 1D vectors
             fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
             slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
