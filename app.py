@@ -29,28 +29,42 @@ watchlist = [t.strip().upper() for t in user_input.split(",") if t.strip()]
 def fetch_live_index_tickers():
     """
     Dynamically scrapes Wikipedia's official component tables 
-    to extract real-time live tickers for major US indices.
-    Caches data for 24 hours to keep page loading instantaneous.
+    using Chrome Headers to bypass HTTP Error 403 Forbidden.
     """
+    import urllib.request
+    
+    # Standard Web Browser Header to bypass Wikipedia firewall blocks
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+    
     try:
         # 1. Scrape S&P 500 Live Components
-        sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        sp500_table = pd.read_html(sp500_url)[0]
-        # Replace '.' with '-' for yfinance compatibility (e.g., BRK.B -> BRK-B)
-        sp500_tickers = sp500_table['Symbol'].str.replace('.', '-', regex=False).tolist()
+        sp500_url = "https://wikipedia.org"
+        req_sp = urllib.request.Request(sp500_url, headers=headers)
+        with urllib.request.urlopen(req_sp) as response:
+            sp500_table = pd.read_html(response.read())
+        sp500_tickers = sp500_table[0]['Symbol'].str.replace('.', '-', regex=False).tolist()
 
         # 2. Scrape Nasdaq 100 Live Components
-        ndx_url = "https://en.wikipedia.org/wiki/Nasdaq-100"
-        ndx_table = pd.read_html(ndx_url)[4] # Component table is usually index 4 on Wiki
-        ndx_tickers = ndx_table['Ticker'].str.replace('.', '-', regex=False).tolist()
+        ndx_url = "https://wikipedia.org"
+        req_ndx = urllib.request.Request(ndx_url, headers=headers)
+        with urllib.request.urlopen(req_ndx) as response:
+            ndx_tables = pd.read_html(response.read())
+            
+        ndx_df = None
+        for table in ndx_tables:
+            if 'Ticker' in table.columns or 'Symbol' in table.columns:
+                ndx_df = table
+                break
+        
+        ticker_col = 'Ticker' if 'Ticker' in ndx_df.columns else 'Symbol'
+        ndx_tickers = ndx_df[ticker_col].str.replace('.', '-', regex=False).tolist()
         
         return sp500_tickers, ndx_tickers
     except Exception as e:
-        # Fallback security tickers if Wikipedia experiences downtime
         st.sidebar.error(f"Live fetch error: {str(e)}. Using baseline matrix.")
         fallback = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AMD", "NFLX", "AVGO"]
         return fallback, fallback
-
+        
 def run_scanner(tickers, is_discovery=False):
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
