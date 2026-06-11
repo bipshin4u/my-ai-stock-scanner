@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import pandas_ta as ta
+import pandas_ta_classic as ta
 import yfinance as yf
 from datetime import datetime, timedelta
 import io
@@ -94,14 +94,11 @@ if st.sidebar.button("🚀 Run Live Market Scan"):
         scanner_df = run_scanner(watchlist)
         
         if not scanner_df.empty:
-            # Sort data beautifully
             scanner_df['SortOrder'] = scanner_df['Action Signal'].map({'🔥 STRONG BUY': 0, '🚨 STRONG SELL': 1, '⏳ HOLD / NEUTRAL': 2})
             scanner_df = scanner_df.sort_values(by='SortOrder').drop(columns=['SortOrder'])
             
-            # Display interactive table on webpage
             st.subheader(f"📊 Market Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} EST")
             
-            # Highlight custom styles
             def color_signals(val):
                 if val == "🔥 STRONG BUY": return "background-color: #d4edda; color: #155724; font-weight: bold;"
                 if val == "🚨 STRONG SELL": return "background-color: #f8d7da; color: #721c24; font-weight: bold;"
@@ -109,7 +106,6 @@ if st.sidebar.button("🚀 Run Live Market Scan"):
             
             st.dataframe(scanner_df.style.applymap(color_signals, subset=['Action Signal']), use_container_width=True, hide_index=True)
             
-            # Generate seamless memory buffer for Excel download link
             buffer = io.BytesIO()
             with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
                 scanner_df.to_excel(writer, index=False, sheet_name="Daily Signals")
