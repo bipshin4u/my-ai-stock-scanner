@@ -586,7 +586,7 @@ def render_charting_layout():
                     risk_dist = abs(current_price - current_st_stop)
                     
                     if risk_dist > 0:
-                        position_size_shares = int(risk_allowance / risk_dist)
+                        position_size_shares = int(max_risk_amount / risk_dist)
                         capital_required = position_size_shares * current_price
                         
                         sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
