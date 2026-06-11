@@ -181,6 +181,9 @@ def compute_native_atr(high, low, close, length=14):
     return atr
 
 def run_scanner(tickers, is_discovery=False):
+    if not tickers:
+        return pd.DataFrame()
+        
     fast_ema_len, slow_ema_len, trend_ema_len = 8, 21, 200
     rsi_len, rsi_lower, rsi_upper = 14, 35, 65
     st_multiplier = 2.5
@@ -190,48 +193,36 @@ def run_scanner(tickers, is_discovery=False):
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-
     progress_bar = st.progress(0)
-    
+    st.sidebar.info(f"⏳ Downloading 365-day history for {len(tickers)} stocks in ONE batch request...")
+
+    try:
+        # --- THE MAGIC FIX: ONE SINGLE NETWORK CALL ---
+        # This completely bypasses the loop rate-limit blocks
+        batch_data = yf.download(tickers, start=start_date, end=end_date, progress=False)
+    except Exception as e:
+        st.sidebar.error(f"🛑 Master Batch Download Failed: {e}")
+        return pd.DataFrame()
+
     for idx, ticker in enumerate(tickers):
         try:
-            # --- Smart Retry Protocol for Yahoo Rate Limits ---
-            max_attempts = 3
-            df = pd.DataFrame()
-            
-            for attempt in range(max_attempts):
-                df = yf.download(ticker, start=start_date, end=end_date, progress=False)
-                
-                # If we successfully got data, break out of the retry loop
-                if not df.empty and len(df) > 0:
-                    break
-                
-                # If it failed (rate limited), pause for 2.5 seconds before trying again
-                time.sleep(2.5)
-            # --------------------------------------------------
-            
-            if df.empty:
-                st.sidebar.warning(f"⚠️ Yahoo blocked {ticker} - No data returned.")
-                continue
-            if len(df) < trend_ema_len:
-                st.sidebar.warning(f"⚠️ Skipped {ticker} - Less than 200 days history.")
-                continue
-                
-            # --- Bulletproof Row Extract: Grab data columns regardless of multiindex nesting labels ---
-            col_strings = [str(c).lower() for c in df.columns]
-            close_idx, high_idx, low_idx = -1, -1, -1
-            
-            for c_i, c_str in enumerate(col_strings):
-                if 'close' in c_str: close_idx = c_i
-                if 'high' in c_str: high_idx = c_i
-                if 'low' in c_str: low_idx = c_i
-                
-            if close_idx == -1 or high_idx == -1 or low_idx == -1:
-                continue
+            # Extract the specific ticker's arrays from the master batch dataframe
+            if len(tickers) > 1:
+                # yfinance returns a MultiIndex when downloading multiple tickers
+                if 'Close' not in batch_data or ticker not in batch_data['Close']:
+                    continue
+                raw_close = batch_data['Close'][ticker].dropna().values.astype('float64')
+                raw_high = batch_data['High'][ticker].dropna().values.astype('float64')
+                raw_low = batch_data['Low'][ticker].dropna().values.astype('float64')
+            else:
+                # yfinance returns a flat dataframe when downloading a single ticker
+                raw_close = batch_data['Close'].dropna().values.astype('float64')
+                raw_high = batch_data['High'].dropna().values.astype('float64')
+                raw_low = batch_data['Low'].dropna().values.astype('float64')
 
-            raw_close = df.iloc[:, close_idx].values.flatten().astype('float64')
-            raw_high = df.iloc[:, high_idx].values.flatten().astype('float64')
-            raw_low = df.iloc[:, low_idx].values.flatten().astype('float64')
+            # Ensure we have enough data to calculate the 200-Day EMA
+            if len(raw_close) < trend_ema_len:
+                continue
 
             # Calculate Native indicators securely
             fast_ema = compute_native_ema(raw_close.copy(), fast_ema_len)
@@ -245,11 +236,11 @@ def run_scanner(tickers, is_discovery=False):
             basic_ub = src + (st_multiplier * atr_np)
             basic_lb = src - (st_multiplier * atr_np)
             
-            final_ub = np.zeros(len(df))
-            final_lb = np.zeros(len(df))
-            st_dir_array = np.zeros(len(df))
+            final_ub = np.zeros(len(raw_close))
+            final_lb = np.zeros(len(raw_close))
+            st_dir_array = np.zeros(len(raw_close))
             
-            for i in range(1, len(df)):
+            for i in range(1, len(raw_close)):
                 if basic_ub[i] < final_ub[i-1] or raw_close[i-1] > final_ub[i-1]:
                     final_ub[i] = basic_ub[i]
                 else:
@@ -270,7 +261,7 @@ def run_scanner(tickers, is_discovery=False):
                         final_lb[i] = final_lb[i-1]
                     if st_dir_array[i] == -1 and final_ub[i] > final_ub[i-1]:
                         final_ub[i] = final_ub[i-1]
-            
+        
             # Regime calculation
             rolling_std = pd.Series(raw_close).rolling(regime_len).std().to_numpy()
             market_volatility = np.where(atr_np > 0, rolling_std / atr_np, 1.0)
@@ -311,11 +302,13 @@ def run_scanner(tickers, is_discovery=False):
                 "RawScore": numeric_score
             })
 
+            # The visual progress bar updates instantly now because the data is already downloaded
             if is_discovery:
-                time.sleep(1.5)
+                time.sleep(0.01) 
 
         except Exception as e:
-            st.sidebar.error(f"🛑 Code Crash on {ticker}: {e}")
+            # If a single stock mathematically fails, quietly skip it without crashing the app
+            pass
             
         progress_bar.progress((idx + 1) / len(tickers))
         
