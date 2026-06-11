@@ -251,7 +251,3 @@ display_master_leaderboard()
 #* **The `axis` Styling Error Fixed:** The script switches back to the `.apply(..., axis=1)` structure, but the core row evaluation logic is completely rewritten to make sure Python tracks row indexes without causing a TypeError crash.
 #* **Separated Personal Watchlist Mode:** Clicking **`🚀 Run Custom Watchlist Scan`** immediately wipes out any old batch numbers, displays only your custom targets grouped by signal strength, and applies full-row background color coding.
 #* **Separated Discovery Mode:** Clicking any **Batch button** will instantly drop your custom items out of the loop and start stacking the discovery layers freshly.
-
-Copy and paste this clean script block to GitHub, and your trading desk will run perfectly! Let me know if you are satisfied with your custom workflow setup.
-format the code in WhatsApp forward. need the space formatting intact for forward
-"""
