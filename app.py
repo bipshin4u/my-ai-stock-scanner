@@ -218,7 +218,11 @@ def run_scanner(tickers, is_discovery=False):
                 time.sleep(2.5)
             # --------------------------------------------------
             
-            if df.empty or len(df) < trend_ema_len:
+            if df.empty:
+                st.sidebar.warning(f"⚠️ Yahoo blocked {ticker} - No data returned.")
+                continue
+            if len(df) < trend_ema_len:
+                st.sidebar.warning(f"⚠️ Skipped {ticker} - Less than 200 days history.")
                 continue
                 
             # --- Bulletproof Row Extract: Grab data columns regardless of multiindex nesting labels ---
@@ -319,7 +323,8 @@ def run_scanner(tickers, is_discovery=False):
                 time.sleep(1.5)
 
         except Exception as e:
-            pass
+            st.sidebar.error(f"🛑 Code Crash on {ticker}: {e}")
+            
         progress_bar.progress((idx + 1) / len(tickers))
         
     return pd.DataFrame(results)
