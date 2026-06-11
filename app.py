@@ -267,8 +267,8 @@ def run_scanner(tickers, is_discovery=False):
             market_volatility = np.where(atr_np > 0, rolling_std / atr_np, 1.0)
 
             is_trending = market_volatility[-1] > regime_threshold
-            ema_buy_trigger = fast_ema[-1] > slow_ema[-1] and fast_ema[-2] <= slow_ema[-2]
-            ema_sell_trigger = fast_ema[-1] < slow_ema[-1] and fast_ema[-2] >= slow_ema[-2]
+            ema_buy_trigger = fast_ema[-1] > slow_ema[-1]
+            ema_sell_trigger = fast_ema[-1] < slow_ema[-1]
             above_macro_trend = raw_close[-1] > trend_ema[-1]
             
             st_bullish = st_dir_array[-1] == 1 if is_trending else True
@@ -289,7 +289,7 @@ def run_scanner(tickers, is_discovery=False):
             if is_trending and rsi_bearish_div: sell_score += 2
 
             regime_label = "TRENDING" if is_trending else "RANGING (Bypassed)"
-            signal = "BUY" if buy_score >= 5 else "SELL" if sell_score >= 5 else "HOLD"
+            signal = "BUY" if buy_score >= 4 else "SELL" if sell_score >= 4 else "HOLD"
             numeric_score = buy_score if buy_score >= sell_score else -sell_score
 
             results.append({
