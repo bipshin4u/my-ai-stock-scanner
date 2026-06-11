@@ -180,10 +180,14 @@ def run_scanner(tickers, is_discovery=False):
     end_date = datetime.today().strftime('%Y-%m-%d')
     start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
 
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    })
+    # Instead of a normal requests session, use a cached database
+    import requests_cache
+
+    # This creates a tiny database file that remembers stock prices for 12 hours
+    session = requests_cache.CachedSession('yfinance.cache', expire_after=43200)
+    session.headers.update({'User-Agent': 'Mozilla/5.0'})
+    # Now when you call yf.download(..., session=session), 
+    # it won't trigger Yahoo's alarms if you recently downloaded it!
 
     progress_bar = st.progress(0)
     
