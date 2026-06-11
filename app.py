@@ -254,18 +254,20 @@ def run_scanner(tickers, is_discovery=False):
         try:
             # Extract the specific ticker's arrays from the master batch dataframe
             if len(tickers) > 1:
-                # yfinance returns a MultiIndex when downloading multiple tickers
                 if 'Close' not in batch_data or ticker not in batch_data['Close']:
                     continue
                 raw_close = batch_data['Close'][ticker].dropna().values.astype('float64')
                 raw_high = batch_data['High'][ticker].dropna().values.astype('float64')
                 raw_low = batch_data['Low'][ticker].dropna().values.astype('float64')
+                # Add Volume extraction
+                raw_volume = batch_data['Volume'][ticker].dropna().values.astype('float64')
             else:
-                # yfinance returns a flat dataframe when downloading a single ticker
                 raw_close = batch_data['Close'].dropna().values.astype('float64')
                 raw_high = batch_data['High'].dropna().values.astype('float64')
                 raw_low = batch_data['Low'].dropna().values.astype('float64')
-
+                # Add Volume extraction
+                raw_volume = batch_data['Volume'].dropna().values.astype('float64')
+                
             # Ensure we have enough data to calculate the 200-Day EMA
             if len(raw_close) < trend_ema_len:
                 continue
@@ -311,31 +313,77 @@ def run_scanner(tickers, is_discovery=False):
             # Regime calculation
             rolling_std = pd.Series(raw_close).rolling(regime_len).std().to_numpy()
             market_volatility = np.where(atr_np > 0, rolling_std / atr_np, 1.0)
+            is_trending = market_volatility[-1] > 1.0  # Volatility Threshold
 
-            is_trending = market_volatility[-1] > regime_threshold
+            # Brain 1 Indicators (Trend)
             ema_buy_trigger = fast_ema[-1] > slow_ema[-1]
             ema_sell_trigger = fast_ema[-1] < slow_ema[-1]
             above_macro_trend = raw_close[-1] > trend_ema[-1]
-            
-            st_bullish = st_dir_array[-1] == 1 if is_trending else True
-            st_bearish = st_dir_array[-1] == -1 if is_trending else True
-
+            st_bullish = st_dir_array[-1] == 1 
+            st_bearish = st_dir_array[-1] == -1 
             rsi_bullish_div = rsi[-1] > rsi[-2] and raw_close[-1] <= raw_close[-2] and rsi[-1] < rsi_upper
             rsi_bearish_div = rsi[-1] < rsi[-2] and raw_close[-1] >= raw_close[-2] and rsi[-1] > rsi_lower
 
+            # Brain 2 Indicators (Mean Reversion / Bollinger Bands)
+            bb_window = 20
+            bb_sma = pd.Series(raw_close).rolling(window=bb_window).mean().to_numpy()
+            bb_std = pd.Series(raw_close).rolling(window=bb_window).std().to_numpy()
+            bb_upper = bb_sma + (2 * bb_std)
+            bb_lower = bb_sma - (2 * bb_std)
+            
+            hitting_lower_bb = raw_close[-1] <= bb_lower[-1] or raw_close[-2] <= bb_lower[-2]
+            hitting_upper_bb = raw_close[-1] >= bb_upper[-1] or raw_close[-2] >= bb_upper[-2]
+            is_oversold = rsi[-1] < 35
+            is_overbought = rsi[-1] > 65
+
+            # --- The Volume Lie-Detector ---
+            vol_sma = pd.Series(raw_volume).rolling(window=20).mean().to_numpy()
+            # Require today's volume to be at least 10% higher than the 20-day average
+            strong_volume_confirmed = raw_volume[-1] > (vol_sma[-1] * 1.1)
+            
+            # ==========================================
+            # THE DUAL-BRAIN SCORING ENGINE
+            # ==========================================
             buy_score = 0
             sell_score = 0
-            if above_macro_trend: buy_score += 1
-            else: sell_score += 1
-            if ema_buy_trigger: buy_score += 2
-            if ema_sell_trigger: sell_score += 2
-            if st_bullish: buy_score += 1
-            if st_bearish: sell_score += 1
-            if is_trending and rsi_bullish_div: buy_score += 2
-            if is_trending and rsi_bearish_div: sell_score += 2
 
-            regime_label = "TRENDING" if is_trending else "RANGING (Bypassed)"
-            signal = "BUY" if buy_score >= 4 else "SELL" if sell_score >= 4 else "HOLD"
+            if is_trending:
+                regime_label = "TRENDING"
+                if above_macro_trend: buy_score += 1
+                else: sell_score += 1
+                if ema_buy_trigger: buy_score += 2
+                if ema_sell_trigger: sell_score += 2
+                if st_bullish: buy_score += 1
+                if st_bearish: sell_score += 1
+                if rsi_bullish_div: buy_score += 2
+                if rsi_bearish_div: sell_score += 2
+                
+                # Tiered Grading + Volume Risk Manager
+                if buy_score >= 5:
+                    signal = "🔥 SUPER BUY"
+                elif buy_score == 4:
+                    signal = "BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                elif sell_score >= 5:
+                    signal = "🩸 SUPER SELL"
+                elif sell_score == 4:
+                    signal = "SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                else:
+                    signal = "HOLD"
+                
+            else:
+                regime_label = "RANGING (Mean-Reversion)"
+                if hitting_lower_bb and is_oversold:
+                    buy_score = 5 
+                    sell_score = 0
+                    # Bounces need volume too!
+                    signal = "🔥 SUPER BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                elif hitting_upper_bb and is_overbought:
+                    sell_score = 5 
+                    buy_score = 0
+                    signal = "🩸 SUPER SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                else:
+                    signal = "HOLD"
+
             numeric_score = buy_score if buy_score >= sell_score else -sell_score
 
             results.append({
@@ -477,105 +525,132 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
 
 # --- ADVANCED CHARTING VISUALIZATION ENGINE ---
 def render_charting_layout():
-    """
-    Renders an interactive Plotly layout chart for a selected ticker 
-    and calculates dynamic position sizing based on native ATR.
-    """
-    df_results = st.session_state.stacked_results
+    st.subheader("📈 Interactive Advanced Charting Workspace")
     
-    if not df_results.empty:
-        st.markdown("---")
-        st.subheader("📈 Institutional Charting & Risk Workspace")
-        
-        ticker_options = sorted(df_results['Ticker'].unique())
-        selected_ticker = st.selectbox("🎯 Select an analyzed stock to visualize:", ticker_options)
-        
-        if selected_ticker:
-            with st.spinner(f"Generating indicator chart for {selected_ticker}..."):
-                end_date = datetime.today().strftime('%Y-%m-%d')
-                start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
-                
-                session = requests.Session()
-                session.headers.update({'User-Agent': 'Mozilla/5.0'})
-                df_stock = yf.download(selected_ticker, start=start_date, end=end_date, progress=False)
-                
-                if not df_stock.empty and len(df_stock) >= 200:
-                    col_strings = [str(c).lower() for c in df_stock.columns]
-                    open_idx, close_idx, high_idx, low_idx = -1, -1, -1, -1
-                    
-                    for c_i, c_str in enumerate(col_strings):
-                        if 'open' in c_str: open_idx = c_i
-                        if 'close' in c_str: close_idx = c_i
-                        if 'high' in c_str: high_idx = c_i
-                        if 'low' in c_str: low_idx = c_i
-                    
-                    raw_open = df_stock.iloc[:, open_idx].values.flatten().astype('float64')
-                    raw_close = df_stock.iloc[:, close_idx].values.flatten().astype('float64')
-                    raw_high = df_stock.iloc[:, high_idx].values.flatten().astype('float64')
-                    raw_low = df_stock.iloc[:, low_idx].values.flatten().astype('float64')
-                    
-                    fast_ema = compute_native_ema(raw_close.copy(), 8)
-                    slow_ema = compute_native_ema(raw_close.copy(), 21)
-                    trend_ema = compute_native_ema(raw_close.copy(), 200)
-                    atr_np = compute_native_atr(raw_high, raw_low, raw_close, length=14)
-                    
-                    # Native SuperTrend logic
-                    src = (raw_high + raw_low) / 2
-                    basic_ub = src + (2.5 * atr_np)
-                    basic_lb = src - (2.5 * atr_np)
-                    final_ub = np.zeros(len(df_stock))
-                    final_lb = np.zeros(len(df_stock))
-                    st_dir = np.zeros(len(df_stock))
-                    
-                    for i in range(1, len(df_stock)):
-                        if basic_ub[i] < final_ub[i-1] or raw_close[i-1] > final_ub[i-1]: final_ub[i] = basic_ub[i]
-                        else: final_ub[i] = final_ub[i-1]
-                        if basic_lb[i] > final_lb[i-1] or raw_close[i-1] < final_lb[i-1]: final_lb[i] = basic_lb[i]
-                        else: final_lb[i] = final_lb[i-1]
-                        
-                        if raw_close[i] > final_ub[i]: st_dir[i] = 1
-                        elif raw_close[i] < final_lb[i]: st_dir[i] = -1
-                        else:
-                            st_dir[i] = st_dir[i-1]
-                            if st_dir[i] == 1 and final_lb[i] < final_lb[i-1]: final_lb[i] = final_lb[i-1]
-                            if st_dir[i] == -1 and final_ub[i] > final_ub[i-1]: final_ub[i] = final_ub[i-1]
-                    
-                    chart_df = pd.DataFrame({
-                        'Open': raw_open, 'High': raw_high, 'Low': raw_low, 'Close': raw_close,
-                        '8 EMA': fast_ema, '21 EMA': slow_ema, '200 EMA': trend_ema,
-                        'SuperTrend Upper': final_ub, 'SuperTrend Lower': final_lb, 'Direction': st_dir
-                    }, index=df_stock.index).tail(90)
-                    
-                    chart_df['Active SuperTrend'] = np.where(chart_df['Direction'] == 1, chart_df['SuperTrend Lower'], chart_df['SuperTrend Upper'])
-                    
-                    # -- PLOTLY CANDLESTICK INTEGRATION --
-                    fig = go.Figure()
-                    
-                    # Candlesticks
-                    fig.add_trace(go.Candlestick(x=chart_df.index, open=chart_df['Open'], high=chart_df['High'], 
-                                                 low=chart_df['Low'], close=chart_df['Close'], name='Price',
-                                                 increasing_line_color='#26a69a', decreasing_line_color='#ef5350'))
-                    
-                    # EMAs
-                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['8 EMA'], mode='lines', name='8 EMA', line=dict(color='#00d1ff', width=1.5)))
-                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['21 EMA'], mode='lines', name='21 EMA', line=dict(color='#ffb800', width=1.5)))
-                    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['200 EMA'], mode='lines', name='200 EMA', line=dict(color='#ff0055', width=2)))
-                    
-                    # Dynamic SuperTrend Color Split
-                    bullish_st = chart_df['Active SuperTrend'].where(chart_df['Direction'] == 1)
-                    bearish_st = chart_df['Active SuperTrend'].where(chart_df['Direction'] == -1)
-                    fig.add_trace(go.Scatter(x=chart_df.index, y=bullish_st, mode='lines', name='ST Bull Support', line=dict(color='#00ff66', width=2, dash='dot')))
-                    fig.add_trace(go.Scatter(x=chart_df.index, y=bearish_st, mode='lines', name='ST Bear Res', line=dict(color='#ff3333', width=2, dash='dot')))
+    # Check if we have successfully scanned any data yet
+    if "stacked_results" not in st.session_state or st.session_state.stacked_results.empty:
+        st.warning("Please execute a market scan from the sidebar to initialize the charting environment.")
+        return
 
-                    fig.update_layout(
-                        template='plotly_dark',
-                        margin=dict(l=20, r=20, t=20, b=20),
-                        height=550,
-                        xaxis_rangeslider_visible=False,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-                    
-                    st.plotly_chart(fig, width="stretch")
+    # Automatically grab the list of valid tickers that were just scanned
+    available_tickers = st.session_state.stacked_results["Ticker"].tolist()
+    
+    selected_ticker = st.selectbox("🎯 Select an analyzed stock to visualize:", available_tickers)
+    
+    # Download clean historical data for just this single selected ticker
+    end_date = datetime.today().strftime('%Y-%m-%d')
+    start_date = (datetime.today() - timedelta(days=365)).strftime('%Y-%m-%d')
+    
+    df = yf.download(selected_ticker, start=start_date, end=end_date, progress=False)
+    if df.empty:
+        st.error("Unable to render chart: Data feed timed out.")
+        return
+
+    # Flat array transformations for native calculations
+    raw_close = df['Close'].dropna().values.astype('float64')
+    raw_high = df['High'].dropna().values.astype('float64')
+    raw_low = df['Low'].dropna().values.astype('float64')
+    raw_volume = df['Volume'].dropna().values.astype('float64')
+    dates = df.index
+
+    # 1. Compute Indicators for the entire historical dataset
+    fast_ema = compute_native_ema(raw_close.copy(), 8)
+    slow_ema = compute_native_ema(raw_close.copy(), 21)
+    trend_ema = compute_native_ema(raw_close.copy(), 200)
+    rsi = compute_native_rsi(raw_close.copy(), 14)
+    atr = compute_native_atr(raw_high, raw_low, raw_close, length=14)
+    
+    # Bollinger Bands
+    bb_sma = pd.Series(raw_close).rolling(window=20).mean().to_numpy()
+    bb_std = pd.Series(raw_close).rolling(window=20).std().to_numpy()
+    bb_upper = bb_sma + (2 * bb_std)
+    bb_lower = bb_sma - (2 * bb_std)
+    
+    # Volume Baseline
+    vol_sma = pd.Series(raw_volume).rolling(window=20).mean().to_numpy()
+
+    # SuperTrend Arrays
+    src = (raw_high + raw_low) / 2
+    b_ub = src + (2.5 * atr)
+    b_lb = src - (2.5 * atr)
+    f_ub, f_lb = np.zeros(len(df)), np.zeros(len(df))
+    st_dir = np.zeros(len(df))
+    
+    for i in range(1, len(df)):
+        f_ub[i] = b_ub[i] if b_ub[i] < f_ub[i-1] or raw_close[i-1] > f_ub[i-1] else f_ub[i-1]
+        f_lb[i] = b_lb[i] if b_lb[i] > f_lb[i-1] or raw_close[i-1] < f_lb[i-1] else f_lb[i-1]
+        st_dir[i] = 1 if raw_close[i] > f_ub[i] else -1 if raw_close[i] < f_lb[i] else st_dir[i-1]
+        if st_dir[i] == 1 and f_lb[i] < f_lb[i-1]: f_lb[i] = f_lb[i-1]
+        if st_dir[i] == -1 and f_ub[i] > f_ub[i-1]: f_ub[i] = f_ub[i-1]
+
+    # 2. Historical Signal Scanner Engine (Backtrack calculation for visual markers)
+    buy_arrow_x, buy_arrow_y = [], []
+    sell_arrow_x, sell_arrow_y = [], []
+
+    for i in range(200, len(df)):
+        rolling_std = pd.Series(raw_close[:i+1]).rolling(14).std().to_numpy()
+        volatility = rolling_std[-1] / atr[i] if atr[i] > 0 else 1.0
+        is_trending = volatility > 1.0
+        strong_vol = raw_volume[i] > (vol_sma[i] * 1.1)
+
+        b_score, s_score = 0, 0
+        if raw_close[i] > trend_ema[i]: b_score += 1
+        else: s_score += 1
+        if fast_ema[i] > slow_ema[i]: b_score += 2
+        else: s_score += 2
+        if st_dir[i] == 1: b_score += 1
+        else: s_score += 1
+
+        if is_trending:
+            if b_score >= 4 and strong_vol:
+                buy_arrow_x.append(dates[i])
+                buy_arrow_y.append(raw_low[i] * 0.98) # Place slightly below candle low
+            elif s_score >= 4 and strong_vol:
+                sell_arrow_x.append(dates[i])
+                sell_arrow_y.append(raw_high[i] * 1.02) # Place slightly above candle high
+        else:
+            hit_lower = raw_close[i] <= bb_lower[i] or raw_close[i-1] <= bb_lower[i-1]
+            hit_upper = raw_close[i] >= bb_upper[i] or raw_close[i-1] >= bb_upper[i-1]
+            if hit_lower and rsi[i] < 35 and strong_vol:
+                buy_arrow_x.append(dates[i])
+                buy_arrow_y.append(raw_low[i] * 0.98)
+            elif hit_upper and rsi[i] > 65 and strong_vol:
+                sell_arrow_x.append(dates[i])
+                sell_arrow_y.append(raw_high[i] * 1.02)
+
+    # 3. Render Advanced Candlestick Charts using Plotly
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
+
+    # Base Candlesticks
+    fig.add_trace(go.Candlestick(x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price Action"), row=1, col=1)
+    
+    # Overlays
+    fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5), name="8 EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5), name="21 EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash'), name="200 Macro EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', width=1), name="Upper BB"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=bb_lower, line=dict(dash='dot', width=1), name="Lower BB"), row=1, col=1)
+
+    # 🎯 VISUAL TRIGGER MARKERS (The Upgrade)
+    fig.add_trace(go.Scatter(
+        x=buy_arrow_x, y=buy_arrow_y, mode='markers',
+        marker=dict(symbol='triangle-up', size=12, line=dict(width=1)), name="Engine BUY Signal"
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=sell_arrow_x, y=sell_arrow_y, mode='markers',
+        marker=dict(symbol='triangle-down', size=12, line=dict(width=1)), name="Engine SELL Signal"
+    ), row=1, col=1)
+
+    # Volume Subplot Layout
+    fig.add_trace(go.Bar(x=dates, y=df['Volume'], name="Volume Feed"), row=2, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=vol_sma, line=dict(width=1.2), name="20 Vol SMA"), row=2, col=1)
+
+    fig.update_layout(xaxis_rangeslider_visible=False, height=650, margin=dict(l=10, r=10, t=20, b=10))
+    st.plotly_chart(fig, use_container_width=True)
 
                     # -- DYNAMIC POSITION SIZING EXECUTION --
                     current_price = chart_df['Close'].iloc[-1]
@@ -606,7 +681,19 @@ def render_charting_layout():
                 else:
                     st.error("Insufficient historical trading volume data found to map structural trend chart.")
                     
-# --- APPLICATION FOOTPRINT MAP CHANGER ---
-# Append the chart draw call to sit directly under your dashboard leaderboard drawer 
-display_master_leaderboard()
-render_charting_layout()
+# ==============================================================================
+# --- MAIN WORKSPACE TERMINAL TABS ---
+# ==============================================================================
+# Create professional terminal tabs to separate data from visualization
+tab_leaderboard, tab_charting = st.tabs([
+    "📊 Live Signal Leaderboard", 
+    "📈 Advanced Charting & Risk"
+])
+
+# Route the matrix to Tab 1
+with tab_leaderboard:
+    display_master_leaderboard()
+
+# Route the interactive Plotly workspace to Tab 2
+with tab_charting:
+    render_charting_layout()
