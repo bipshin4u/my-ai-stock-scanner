@@ -656,30 +656,30 @@ def render_charting_layout():
     current_price = chart_df['Close'].iloc[-1]
     current_st_stop = chart_df['Active SuperTrend'].iloc[-1]
     current_dir = chart_df['Direction'].iloc[-1]
-                    
-                    st.markdown("### 🧮 Live Position Sizing")
-                    risk_dist = abs(current_price - current_st_stop)
-                    
-                    if risk_dist > 0:
-                        position_size_shares = int(max_risk_amount / risk_dist)
-                        capital_required = position_size_shares * current_price
-                        
-                        sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
-                        # Inside the position sizing metric card layout section of render_charting_layout():
-                        sz_col1.metric("Current Entry Price", f"{currency_char}{current_price:.2f}")
-                        sz_col2.metric("SuperTrend Stop Loss", f"{currency_char}{current_st_stop:.2f}")
-                        sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
-                        
-                        # Capital allocation warning
-                        if capital_required > account_equity:
-                            sz_col4.error(f"⚠️ Insufficient Buying Power")
-                        else:
-                            sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
-                    else:
-                        st.warning("Risk distance is zero. Wait for valid volatility expansion.")
-                        
-                else:
-                    st.error("Insufficient historical trading volume data found to map structural trend chart.")
+
+    st.markdown("### 🧮 Live Position Sizing")
+    risk_dist = abs(current_price - current_st_stop)
+    
+    if risk_dist > 0:
+        position_size_shares = int(max_risk_amount / risk_dist)
+        capital_required = position_size_shares * current_price
+
+        sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
+        # Inside the position sizing metric card layout section of render_charting_layout():
+        sz_col1.metric("Current Entry Price", f"{currency_char}{current_price:.2f}")
+        sz_col2.metric("SuperTrend Stop Loss", f"{currency_char}{current_st_stop:.2f}")
+        sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
+
+        # Capital allocation warning
+        if capital_required > account_equity:
+            sz_col4.error(f"⚠️ Insufficient Buying Power")
+        else:
+            sz_col4.metric("Capital Allocated", f"{currency_char}{capital_required:,.2f}")
+    else:
+        st.warning("Risk distance is zero. Wait for valid volatility expansion.")
+
+else:
+    st.error("Insufficient historical trading volume data found to map structural trend chart.")
                     
 # ==============================================================================
 # --- MAIN WORKSPACE TERMINAL TABS ---
