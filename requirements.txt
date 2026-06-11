@@ -9,4 +9,3 @@ requests
 plotly
 html5lib
 beautifulsoup4
-requests-cache
