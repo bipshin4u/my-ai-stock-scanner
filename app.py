@@ -25,18 +25,22 @@ if "active_mode" not in st.session_state:
 st.sidebar.header("🗺️ Market Selection & Control Panel")
 
 # Automated Web Scraper for Live Index Tickers
-@st.cache_data(ttl=86400)  # Cache the data for 24 hours so it doesn't scrape on every click
+@st.cache_data(ttl=86400)  # Cache the data for 24 hours
 def fetch_live_index(url, column_name):
-    """Scrapes Wikipedia for live index constituents."""
+    """Scrapes Wikipedia for live index constituents using a browser disguise."""
     try:
-        tables = pd.read_html(url)
+        # Put on our Google Chrome disguise so Wikipedia doesn't block us
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers)
+        
+        # Now read the tables from our successful request
+        tables = pd.read_html(response.text)
         for df in tables:
             if column_name in df.columns:
-                # Grab symbols and clean them up (Yahoo uses dashes instead of dots for US stocks like BRK.B)
                 symbols = df[column_name].astype(str).str.replace('.', '-', regex=False).tolist()
                 return symbols
         return []
-    except:
+    except Exception as e:
         return []
 
 market_mode = st.sidebar.selectbox("Select Target Market", ["US Equities (NASDAQ/NYSE)", "Indian Equities (NSE)"])
