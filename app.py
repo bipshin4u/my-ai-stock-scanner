@@ -58,27 +58,37 @@ def run_scanner(tickers, is_discovery=False):
     
     for idx, ticker in enumerate(tickers):
         try:
-            # --- FIXED: multi_level_index=False ensures a flat table structure for all tickers ---
-            df = yf.download(ticker, start=start_date, end=end_date, progress=False, multi_level_index=False)
+            # --- UPDATED: Force ticker grouping to handle newer yfinance data structures ---
+            df = yf.download(ticker, start=start_date, end=end_date, progress=False, group_by='ticker')
             
             if df.empty or len(df) < trend_ema_len:
                 continue
                 
-            # Flatten multi-index columns if they manage to sneak through the API
+            # --- UPDATED: Isolate the single ticker layer to remove the MultiIndex columns ---
             if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
+                if ticker in df.columns.get_level_values(0):
+                    df = df[ticker] 
+                else:
+                    df.columns = df.columns.get_level_values(0)
 
-            # Extract the raw series data cleanly
-            close_series = pd.Series(df['Close'].values, index=df.index)
-            high_series = pd.Series(df['High'].values, index=df.index)
-            low_series = pd.Series(df['Low'].values, index=df.index)
+            # Standardize column headers
+            df.columns = [str(c).strip().capitalize() for c in df.columns]
+            
+            if 'Close' not in df.columns:
+                continue
 
-            # Compute technical analysis indicators
+            # --- UPDATED: Flatten values into pure 1D vectors to prevent indicator errors ---
+            close_series = pd.Series(df['Close'].values.flatten(), index=df.index)
+            high_series = pd.Series(df['High'].values.flatten(), index=df.index)
+            low_series = pd.Series(df['Low'].values.flatten(), index=df.index)
+
+            # Compute technical analysis indicators safely using the 1D vectors
             fast_ema = ta.ema(close_series, length=fast_ema_len).to_numpy()
             slow_ema = ta.ema(close_series, length=slow_ema_len).to_numpy()
             trend_ema = ta.ema(close_series, length=trend_ema_len).to_numpy()
             rsi = ta.rsi(close_series, length=rsi_len).to_numpy()
             
+            # Use high_series and low_series for SuperTrend and ATR calculations
             st_df = ta.supertrend(high_series, low_series, close_series, length=st_period, multiplier=st_multiplier)
             st_dir = st_df.iloc[:, 1].fillna(0).to_numpy()
             
