@@ -547,10 +547,10 @@ def render_charting_layout():
         return
 
     # Flat array transformations for native calculations
-    raw_close = df['Close'].dropna().values.astype('float64')
-    raw_high = df['High'].dropna().values.astype('float64')
-    raw_low = df['Low'].dropna().values.astype('float64')
-    raw_volume = df['Volume'].dropna().values.astype('float64')
+    raw_close = df['Close'].dropna().values.flatten().astype('float64')
+    raw_high = df['High'].dropna().values.flatten().astype('float64')
+    raw_low = df['Low'].dropna().values.flatten().astype('float64')
+    raw_volume = df['Volume'].dropna().values.flatten().astype('float64')
     dates = df.index
 
     # 1. Compute Indicators for the entire historical dataset
