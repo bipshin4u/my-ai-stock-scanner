@@ -360,29 +360,47 @@ def run_scanner(tickers, is_discovery=False):
                 if rsi_bullish_div: buy_score += 2
                 if rsi_bearish_div: sell_score += 2
                 
-                # Tiered Grading + Volume Risk Manager
+                # 1. PRE-CALCULATION: Define the safety stop and the validity flags
+                # This determines where the SuperTrend stop loss is currently sitting
+                current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
+    
+                # A Buy is only valid if the Stop Loss is BELOW the current price
+                is_valid_buy_setup = (raw_close[i] > current_st_stop)
+                # A Sell (Short) is only valid if the Stop Loss is ABOVE the current price
+                is_valid_sell_setup = (raw_close[i] < current_st_stop)
+
+                # 2. TIERED GRADING + VOLUME RISK MANAGER
                 if buy_score >= 5:
-                    signal = "🔥 SUPER BUY"
+                    signal = "🔥 SUPER BUY" if is_valid_buy_setup else "HOLD (Invalid Stop)"
                 elif buy_score == 4:
-                    signal = "BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    if not is_valid_buy_setup:
+                        signal = "HOLD (Invalid Stop)"
+                    else:
+                        signal = "BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
                 elif sell_score >= 5:
-                    signal = "🩸 SUPER SELL"
+                    signal = "🩸 SUPER SELL" if is_valid_sell_setup else "HOLD (Invalid Stop)"
                 elif sell_score == 4:
-                    signal = "SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    if not is_valid_sell_setup:
+                        signal = "HOLD (Invalid Stop)"
+                    else:
+                        signal = "SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
                 else:
                     signal = "HOLD"
-                
+            
             else:
+                # RANGING (Mean-Reversion) Logic
                 regime_label = "RANGING (Mean-Reversion)"
                 if hitting_lower_bb and is_oversold:
                     buy_score = 5 
                     sell_score = 0
-                    # Bounces need volume too!
-                    signal = "🔥 SUPER BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    # Apply safety lock to Mean Reversion Bounces
+                    signal = "🔥 SUPER BUY" if (strong_volume_confirmed and is_valid_buy_setup) else ("HOLD (Invalid Stop)" if not is_valid_buy_setup else "⚠️ LOW VOL (Bypass)")
+            
                 elif hitting_upper_bb and is_overbought:
                     sell_score = 5 
                     buy_score = 0
-                    signal = "🩸 SUPER SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    # Apply safety lock to Mean Reversion Sells
+                    signal = "🩸 SUPER SELL" if (strong_volume_confirmed and is_valid_sell_setup) else ("HOLD (Invalid Stop)" if not is_valid_sell_setup else "⚠️ LOW VOL (Bypass)")
                 else:
                     signal = "HOLD"
 
@@ -708,6 +726,12 @@ def render_charting_layout():
         is_trending = volatility_array[i] > 1.0
         strong_vol = raw_volume[i] > (vol_ma[i] * 1.1)
 
+        # 1. Determine the active stop loss based on current SuperTrend
+        current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
+        
+        # 2. Safety Lock: A Buy is only valid if the Stop is BELOW the current price
+        is_valid_buy_setup = (raw_close[i] > current_st_stop)
+        
         b_score, s_score = 0, 0
         if raw_close[i] > trend_ema[i]: b_score += 1
         else: s_score += 1
@@ -716,8 +740,10 @@ def render_charting_layout():
         if st_dir[i] == 1: b_score += 1
         else: s_score += 1
 
+        # 3. Apply the Safety Lock to the visual trigger
         if is_trending:
-            if b_score >= 4 and strong_vol:
+            # We add 'is_valid_buy_setup' as a mandatory requirement
+            if b_score >= 4 and strong_vol and is_valid_buy_setup:
                 buy_arrow_x.append(dates[i])
                 buy_arrow_y.append(raw_low[i] * 0.98)
             elif s_score >= 4 and strong_vol:
