@@ -437,12 +437,29 @@ def display_master_leaderboard():
         st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
         
         def color_whole_rows(row):
-            if row['Action Signal'] == "BUY":
-                return ['background-color: #1e4620; color: #ffffff; font-weight: bold;'] * len(row)
-            elif row['Action Signal'] == "SELL":
-                return ['background-color: #611f1d; color: #ffffff; font-weight: bold;'] * len(row)
-            else:
-                return ['background-color: #1a1c23; color: #a3a8b4;'] * len(row)
+            """
+            Styles the entire row based on the Action Signal in the row.
+            """
+            signal = str(row['Action Signal'])
+    
+            # Define colors
+            # SUPER BUY: Bright Neon Green
+            # BUY: Standard Forest Green
+            # SUPER SELL: Bright Red
+            # SELL: Dark Red
+    
+            styles = [''] * len(row) # Default (no style)
+    
+            if "SUPER BUY" in signal:
+                styles = ['background-color: #00FF00; color: black'] * len(row)
+            elif "BUY" in signal:
+                styles = ['background-color: #228B22; color: white'] * len(row)
+            elif "SUPER SELL" in signal:
+                styles = ['background-color: #FF0000; color: white'] * len(row)
+            elif "SELL" in signal:
+                styles = ['background-color: #8B0000; color: white'] * len(row)
+        
+            return styles
         
         display_df = df.drop(columns=['RawScore']) if 'RawScore' in df.columns else df
         styled_df = display_df.style.apply(color_whole_rows, axis=1)
@@ -593,15 +610,22 @@ def render_charting_layout():
         if st_dir[i] == 1 and f_lb[i] < f_lb[i-1]: f_lb[i] = f_lb[i-1]
         if st_dir[i] == -1 and f_ub[i] > f_ub[i-1]: f_ub[i] = f_ub[i-1]
 
-    # 2. Historical Signal Scanner Engine (Backtrack calculation for visual markers)
+    # 2. Historical Signal Scanner Engine (Pre-calculate everything for speed)
     buy_arrow_x, buy_arrow_y = [], []
     sell_arrow_x, sell_arrow_y = [], []
 
+    # Pre-calculate volatility and volume triggers across the WHOLE array at once
+    # This avoids the "Index out of bounds" errors entirely
+    volatility_array = (pd.Series(raw_close).rolling(14).std().to_numpy() / atr)
+    volatility_array[np.isnan(volatility_array)] = 0 # Clean up NaNs
+    
+    # Calculate volume baseline across the whole array
+    vol_ma = pd.Series(raw_volume).rolling(20).mean().to_numpy()
+
     for i in range(200, len(df)):
-        rolling_std = pd.Series(raw_close[:i+1]).rolling(14).std().to_numpy()
-        volatility = rolling_std[-1] / atr[i] if atr[i] > 0 else 1.0
-        is_trending = volatility > 1.0
-        strong_vol = raw_volume[i] > (vol_sma[i] * 1.1)
+        # Check Brain 1 (Trending) or Brain 2 (Ranging)
+        is_trending = volatility_array[i] > 1.0
+        strong_vol = raw_volume[i] > (vol_ma[i] * 1.1)
 
         b_score, s_score = 0, 0
         if raw_close[i] > trend_ema[i]: b_score += 1
@@ -614,10 +638,10 @@ def render_charting_layout():
         if is_trending:
             if b_score >= 4 and strong_vol:
                 buy_arrow_x.append(dates[i])
-                buy_arrow_y.append(raw_low[i] * 0.98) # Place slightly below candle low
+                buy_arrow_y.append(raw_low[i] * 0.98)
             elif s_score >= 4 and strong_vol:
                 sell_arrow_x.append(dates[i])
-                sell_arrow_y.append(raw_high[i] * 1.02) # Place slightly above candle high
+                sell_arrow_y.append(raw_high[i] * 1.02)
         else:
             hit_lower = raw_close[i] <= bb_lower[i] or raw_close[i-1] <= bb_lower[i-1]
             hit_upper = raw_close[i] >= bb_upper[i] or raw_close[i-1] >= bb_upper[i-1]
