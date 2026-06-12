@@ -417,15 +417,40 @@ def display_master_leaderboard():
         df = df.drop_duplicates(subset=["Ticker"], keep="last")
         df['SortOrder'] = df['Action Signal'].map({'BUY': 0, 'SELL': 1, 'HOLD': 2})
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
-        
-        total_buys = int(sum(df['Action Signal'] == "BUY"))
-        total_sells = int(sum(df['Action Signal'] == "SELL"))
-        
-        st.subheader(f"🎯 Aggregated {st.session_state.active_mode} Analysis Metrics")
-        m_col1, m_col2, m_col3 = st.columns(3)
-        m_col1.metric("Strong Buy Setups Found", f"{total_buys} Stocks")
-        m_col2.metric("Strong Sell Setups Found", f"{total_sells} Stocks")
-        m_col3.metric("Total Active Table Tickers", f"{len(df)} Tickers")
+
+        # --- UPGRADED SUMMARY METRICS ---
+        # Instead of checking for equality (==), we check if the string CONTAINS "BUY" or "SELL"
+        # This captures both "BUY", "SUPER BUY", "SELL", and "SUPER SELL"
+        total_buys = len(st.session_state.stacked_results[
+            st.session_state.stacked_results['Action Signal'].str.contains('BUY', na=False)
+        ])
+
+        total_sells = len(st.session_state.stacked_results[
+            st.session_state.stacked_results['Action Signal'].str.contains('SELL', na=False)
+        ])
+
+        # --- 2. Calculate "Super" Splits (The Bonus Logic) ---
+        super_buys = len(st.session_state.stacked_results[
+            st.session_state.stacked_results['Action Signal'] == "🔥 SUPER BUY"
+        ])
+
+        super_sells = len(st.session_state.stacked_results[
+            st.session_state.stacked_results['Action Signal'] == "🩸 SUPER SELL"
+        ])
+
+        # --- 3. Render Metrics ---
+        col1, col2, col3 = st.columns(3)
+
+        # Display Buy Metrics
+        col1.metric("Strong Buy Setups", total_buys)
+        col1.caption(f"({super_buys} are Super Buys)")
+
+        # Display Sell Metrics
+        col2.metric("Strong Sell Setups", total_sells)
+        col2.caption(f"({super_sells} are Super Sells)")
+
+        # Display Total
+        col3.metric("Total Active Table Tickers", len(st.session_state.stacked_results))
         
         loaded_batches = ", ".join(sorted(list(st.session_state.scanned_batches)))
         st.info(f"📁 Current visible data layer: **{loaded_batches}**")
