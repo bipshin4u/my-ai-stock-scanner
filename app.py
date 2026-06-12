@@ -425,23 +425,13 @@ def display_master_leaderboard():
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
 
         # --- UPGRADED SUMMARY METRICS ---
-        total_buys = len(st.session_state.stacked_results[
-            st.session_state.stacked_results['Action Signal'].str.contains('BUY', na=False)
-        ])
-
-        total_sells = len(st.session_state.stacked_results[
-            st.session_state.stacked_results['Action Signal'].str.contains('SELL', na=False)
-        ])
+        total_buys = len(df[df['Action Signal'].str.contains('BUY', na=False)])
+        total_sells = len(df[df['Action Signal'].str.contains('SELL', na=False)])
 
         # --- Calculate "Super" Splits ---
-        super_buys = len(st.session_state.stacked_results[
-            st.session_state.stacked_results['Action Signal'] == "🔥 SUPER BUY"
-        ])
-
-        super_sells = len(st.session_state.stacked_results[
-            st.session_state.stacked_results['Action Signal'] == "🩸 SUPER SELL"
-        ])
-
+        super_buys = len(df[df['Action Signal'] == "🔥 SUPER BUY"])
+        super_sells = len(df[df['Action Signal'] == "🩸 SUPER SELL"])
+        
         # --- Render Metrics with Visual Alert Logic ---
         col1, col2, col3 = st.columns(3)
 
@@ -640,6 +630,7 @@ def render_charting_layout():
         return
 
     # Flat array transformations for native calculations
+    raw_open = df['Open'].dropna().values.flatten().astype('float64')  # <--- ADD THIS LINE
     raw_close = df['Close'].dropna().values.flatten().astype('float64')
     raw_high = df['High'].dropna().values.flatten().astype('float64')
     raw_low = df['Low'].dropna().values.flatten().astype('float64')
@@ -735,12 +726,12 @@ def render_charting_layout():
     
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
 
-    # Base Candlesticks (Bulletproof Native Properties)
+    # Base Candlesticks (Using Safe Flattened Arrays)
     fig.add_trace(go.Candlestick(
-        x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
+        x=dates, open=raw_open, high=raw_high, low=raw_low, close=raw_close, 
         name="Price Action",
-        increasing_line_color='#00CC96', # Vibrant Teal/Green
-        decreasing_line_color='#FF3E3E'  # Vibrant Red
+        increasing_line_color='#00CC96', 
+        decreasing_line_color='#FF3E3E'  
     ), row=1, col=1)
     
     # Overlays
@@ -780,16 +771,15 @@ def render_charting_layout():
         row=1, col=1
     )
 
-    # 📊 UPGRADED VOLUME SUBPLOT
-    # Safe numpy array to guarantee color array length exactly matches the data length
-    vol_colors = np.where(df['Close'] >= df['Open'], '#00CC96', '#FF3E3E')
+    # 📊 UPGRADED VOLUME SUBPLOT (Using Safe Flattened Arrays)
+    vol_colors = np.where(raw_close >= raw_open, '#00CC96', '#FF3E3E')
 
     fig.add_trace(go.Bar(
-        x=dates, y=df['Volume'], 
+        x=dates, y=raw_volume, 
         marker_color=vol_colors, 
         name="Volume Feed"
     ), row=2, col=1)
-    
+        
     fig.add_trace(go.Scatter(
         x=dates, y=vol_sma, 
         line=dict(color='orange', width=1.5), 
