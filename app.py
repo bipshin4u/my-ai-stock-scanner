@@ -105,7 +105,9 @@ def format_tickers(ticker_string, mode):
         "UNIONBK": "UNIONBANK",
         "REC": "RECLTD",
         "PEL": "PEL-EQ", # Yahoo occasionally alters Piramal's mapping
-        "CAPLINPOINT": "CAPLIPOINT"
+        "CAPLINPOINT": "CAPLIPOINT",
+        "TATAMOTORS": "TATAMOTORS.NS", # Ensure explicit NS suffix
+        "ZOMATO": "ZOMATO.NS"          # Ensure explicit NS suffix
     }
     
     corrected_list = []
@@ -576,10 +578,18 @@ def render_charting_layout():
     f_ub, f_lb = np.zeros(len(df)), np.zeros(len(df))
     st_dir = np.zeros(len(df))
     
+    # 2. Robust SuperTrend Calculation with bounds protection
+    # We loop up to len(df) and stop at the very last index safely
     for i in range(1, len(df)):
+        # Safety Gate: Ensure we never exceed the array bounds
+        if i >= len(b_ub) or i >= len(f_ub):
+            break
+            
         f_ub[i] = b_ub[i] if b_ub[i] < f_ub[i-1] or raw_close[i-1] > f_ub[i-1] else f_ub[i-1]
         f_lb[i] = b_lb[i] if b_lb[i] > f_lb[i-1] or raw_close[i-1] < f_lb[i-1] else f_lb[i-1]
+        
         st_dir[i] = 1 if raw_close[i] > f_ub[i] else -1 if raw_close[i] < f_lb[i] else st_dir[i-1]
+        
         if st_dir[i] == 1 and f_lb[i] < f_lb[i-1]: f_lb[i] = f_lb[i-1]
         if st_dir[i] == -1 and f_ub[i] > f_ub[i-1]: f_ub[i] = f_ub[i-1]
 
