@@ -727,35 +727,79 @@ def render_charting_layout():
                 sell_arrow_y.append(raw_high[i] * 1.02)
 
     # 3. Render Advanced Candlestick Charts using Plotly
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.02)
 
     # Base Candlesticks
-    fig.add_trace(go.Candlestick(x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name="Price Action"), row=1, col=1)
+    fig.add_trace(go.Candlestick(
+        x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
+        name="Price Action"
+    ), row=1, col=1)
     
     # Overlays
-    fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5), name="8 EMA"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5), name="21 EMA"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash'), name="200 Macro EMA"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', width=1), name="Upper BB"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=bb_lower, line=dict(dash='dot', width=1), name="Lower BB"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5, color='#2962FF'), name="8 EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5, color='#FF6D00'), name="21 EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash', color='white', width=1), name="200 Macro EMA"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', color='gray', width=1), name="Upper BB"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=dates, y=bb_lower, line=dict(dash='dot', color='gray', width=1), name="Lower BB"), row=1, col=1)
 
     # 🎯 VISUAL TRIGGER MARKERS
     fig.add_trace(go.Scatter(
         x=buy_arrow_x, y=buy_arrow_y, mode='markers',
-        marker=dict(symbol='triangle-up', size=12, line=dict(width=1)), name="Engine BUY Signal"
+        marker=dict(symbol='triangle-up', size=14, color='yellow', line=dict(width=1, color='black')), 
+        name="Engine BUY Signal"
     ), row=1, col=1)
 
     fig.add_trace(go.Scatter(
         x=sell_arrow_x, y=sell_arrow_y, mode='markers',
-        marker=dict(symbol='triangle-down', size=12, line=dict(width=1)), name="Engine SELL Signal"
+        marker=dict(symbol='triangle-down', size=14, color='red', line=dict(width=1, color='black')), 
+        name="Engine SELL Signal"
     ), row=1, col=1)
 
-    # Volume Subplot Layout
-    fig.add_trace(go.Bar(x=dates, y=df['Volume'], name="Volume Feed"), row=2, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=vol_sma, line=dict(width=1.2), name="20 Vol SMA"), row=2, col=1)
+    # 📍 CURRENT PRICE TRACKER LINE
+    current_price_val = raw_close[-1]
+    fig.add_hline(
+        y=current_price_val, 
+        line_dash="dot", 
+        line_color="#00FF00", # Bright Neon Green
+        line_width=1.5,
+        opacity=0.8,
+        annotation_text=f"Current: {current_price_val:.2f}", 
+        annotation_position="bottom right",
+        annotation_font_color="#00FF00",
+        row=1, col=1
+    )
 
-    fig.update_layout(xaxis_rangeslider_visible=False, height=650, margin=dict(l=10, r=10, t=20, b=10))
-    st.plotly_chart(fig, width='stretch')
+    # 📊 UPGRADED VOLUME SUBPLOT (Dynamic Colors)
+    # Determine colors: Green if Close >= Open, Red if Close < Open
+    vol_colors = ['rgba(0, 255, 0, 0.4)' if close >= open_price else 'rgba(255, 0, 0, 0.4)' 
+                  for close, open_price in zip(df['Close'], df['Open'])]
+
+    fig.add_trace(go.Bar(
+        x=dates, y=df['Volume'], 
+        marker_color=vol_colors, 
+        name="Volume Feed"
+    ), row=2, col=1)
+    
+    fig.add_trace(go.Scatter(
+        x=dates, y=vol_sma, 
+        line=dict(color='orange', width=1.5), 
+        name="20 Vol SMA"
+    ), row=2, col=1)
+
+    # Layout adjustments for a tighter, cleaner look
+    fig.update_layout(
+        xaxis_rangeslider_visible=False, 
+        xaxis2_rangeslider_visible=False, 
+        height=700, 
+        margin=dict(l=10, r=40, t=20, b=10), # Added right margin for the price label
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    # Remove gaps between weekends/holidays on the x-axis
+    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])]) 
+
+    st.plotly_chart(fig, width='stretch', use_container_width=True)
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
     current_price = raw_close[-1]
