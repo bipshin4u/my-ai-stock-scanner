@@ -610,19 +610,17 @@ def render_charting_layout():
         if st_dir[i] == 1 and f_lb[i] < f_lb[i-1]: f_lb[i] = f_lb[i-1]
         if st_dir[i] == -1 and f_ub[i] > f_ub[i-1]: f_ub[i] = f_ub[i-1]
 
-    # 2. Historical Signal Scanner Engine (Pre-calculate everything for speed)
+    # 2. Historical Signal Scanner Engine
     buy_arrow_x, buy_arrow_y = [], []
     sell_arrow_x, sell_arrow_y = [], []
 
-    # Pre-calculate volatility and volume triggers across the WHOLE array at once
-    # This avoids the "Index out of bounds" errors entirely
-    volatility_array = (pd.Series(raw_close).rolling(14).std().to_numpy() / atr)
-    volatility_array[np.isnan(volatility_array)] = 0 # Clean up NaNs
-    
-    # Calculate volume baseline across the whole array
+    # Pre-calculate across the valid length of the array to avoid "out of bounds"
     vol_ma = pd.Series(raw_volume).rolling(20).mean().to_numpy()
+    
+    # SAFETY GATE: Ensure we only loop as far as the shortest array allows
+    limit = min(len(df), len(volatility_array), len(raw_volume))
 
-    for i in range(200, len(df)):
+    for i in range(200, limit):
         # Check Brain 1 (Trending) or Brain 2 (Ranging)
         is_trending = volatility_array[i] > 1.0
         strong_vol = raw_volume[i] > (vol_ma[i] * 1.1)
