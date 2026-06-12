@@ -7,6 +7,7 @@ import time
 import requests
 import numpy as np
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots  # <--- ADD THIS LINE HERE
 
 # Page Layout Configuration
 st.set_page_config(page_title="AI Market Confluence Scanner", layout="wide")
