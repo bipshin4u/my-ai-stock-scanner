@@ -344,9 +344,11 @@ def run_scanner(tickers, is_discovery=False):
             strong_volume_confirmed = raw_volume[-1] > (vol_sma[-1] * 1.1)
 
             # --- UNIFIED SAFETY LOCK (Calculate BEFORE Regime Check) ---
-            current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
-            is_valid_buy_setup = (raw_close[i] > current_st_stop)
-            is_valid_sell_setup = (raw_close[i] < current_st_stop)
+            # Using the correct arrays for the scanner (final_lb, final_ub, st_dir_array) 
+            # and looking at the most recent day [-1]
+            current_st_stop = final_lb[-1] if st_dir_array[-1] == 1 else final_ub[-1]
+            is_valid_buy_setup = (raw_close[-1] > current_st_stop)
+            is_valid_sell_setup = (raw_close[-1] < current_st_stop)
             
             # ==========================================
             # THE DUAL-BRAIN SCORING ENGINE
