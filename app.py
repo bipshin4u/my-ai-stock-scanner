@@ -163,7 +163,6 @@ with st.sidebar.expander("💰 Risk & Sizing Calculator", expanded=False):
     
     st.info(f"**Max Capital Risked Per Trade:**\n\n{curr_symbol}{max_risk_amount:,.2f}")
 
-#st.sidebar.markdown("---")
 # ==============================================================================
 
 # --- NATIVE MATHEMATICAL MATH ENGINES (NO EXTERNAL LIBRARIES REQUIRED) ---
@@ -344,8 +343,7 @@ def run_scanner(tickers, is_discovery=False):
             strong_volume_confirmed = raw_volume[-1] > (vol_sma[-1] * 1.1)
 
             # --- UNIFIED SAFETY LOCK (Calculate BEFORE Regime Check) ---
-            # Using the correct arrays for the scanner (final_lb, final_ub, st_dir_array) 
-            # and looking at the most recent day [-1]
+            # Using the correct arrays for the scanner and looking at the most recent day [-1]
             current_st_stop = final_lb[-1] if st_dir_array[-1] == 1 else final_ub[-1]
             is_valid_buy_setup = (raw_close[-1] > current_st_stop)
             is_valid_sell_setup = (raw_close[-1] < current_st_stop)
@@ -393,7 +391,6 @@ def run_scanner(tickers, is_discovery=False):
                 else:
                     signal = "HOLD"
 
-            
             numeric_score = buy_score if buy_score >= sell_score else -sell_score
 
             results.append({
@@ -427,8 +424,6 @@ def display_master_leaderboard():
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
 
         # --- UPGRADED SUMMARY METRICS ---
-        # Instead of checking for equality (==), we check if the string CONTAINS "BUY" or "SELL"
-        # This captures both "BUY", "SUPER BUY", "SELL", and "SUPER SELL"
         total_buys = len(st.session_state.stacked_results[
             st.session_state.stacked_results['Action Signal'].str.contains('BUY', na=False)
         ])
@@ -437,7 +432,7 @@ def display_master_leaderboard():
             st.session_state.stacked_results['Action Signal'].str.contains('SELL', na=False)
         ])
 
-        # --- 2. Calculate "Super" Splits (The Bonus Logic) ---
+        # --- Calculate "Super" Splits ---
         super_buys = len(st.session_state.stacked_results[
             st.session_state.stacked_results['Action Signal'] == "🔥 SUPER BUY"
         ])
@@ -446,13 +441,12 @@ def display_master_leaderboard():
             st.session_state.stacked_results['Action Signal'] == "🩸 SUPER SELL"
         ])
 
-        # --- 3. Render Metrics with Visual Alert Logic ---
+        # --- Render Metrics with Visual Alert Logic ---
         col1, col2, col3 = st.columns(3)
 
         # Display Buy Metrics
         col1.metric("Strong Buy Setups", total_buys)
         if super_buys > 0:
-            # High-visibility neon green alert
             col1.markdown(f"<span style='color: #00FF00; font-weight: bold;'>({super_buys} are Super Buys)</span>", unsafe_allow_html=True)
         else:
             col1.caption(f"({super_buys} are Super Buys)")
@@ -460,7 +454,6 @@ def display_master_leaderboard():
         # Display Sell Metrics
         col2.metric("Strong Sell Setups", total_sells)
         if super_sells > 0:
-            # High-visibility bright red alert
             col2.markdown(f"<span style='color: #FF0000; font-weight: bold;'>({super_sells} are Super Sells)</span>", unsafe_allow_html=True)
         else:
             col2.caption(f"({super_sells} are Super Sells)")
@@ -472,23 +465,13 @@ def display_master_leaderboard():
         st.info(f"📁 Current visible data layer: **{loaded_batches}**")
         
         st.markdown("---")
-        # Inside display_master_leaderboard():
         time_suffix = "IST" if market_mode == "Indian Equities (NSE)" else "EST"
         st.subheader(f"📊 Live Signal Matrix Leaderboard — {datetime.now().strftime('%Y-%m-%d %H:%M')} {time_suffix}")
         st.caption("💡 Tip: Click on any column header name below to instantly re-sort the rows dynamically.")
         
         def color_whole_rows(row):
-            """
-            Styles the entire row based on the Action Signal in the row.
-            """
+            """Styles the entire row based on the Action Signal in the row."""
             signal = str(row['Action Signal'])
-    
-            # Define colors
-            # SUPER BUY: Bright Neon Green
-            # BUY: Standard Forest Green
-            # SUPER SELL: Bright Red
-            # SELL: Dark Red
-    
             styles = [''] * len(row) # Default (no style)
     
             if "SUPER BUY" in signal:
@@ -683,7 +666,6 @@ def render_charting_layout():
     st_dir = np.zeros(len(df))
     
     # 2. Robust SuperTrend Calculation with bounds protection
-    # We loop up to len(df) and stop at the very last index safely
     for i in range(1, len(df)):
         # Safety Gate: Ensure we never exceed the array bounds
         if i >= len(b_ub) or i >= len(f_ub):
@@ -701,10 +683,10 @@ def render_charting_layout():
     buy_arrow_x, buy_arrow_y = [], []
     sell_arrow_x, sell_arrow_y = [], []
 
-    # Pre-calculate across the valid length of the array to avoid "out of bounds"
+    # Pre-calculate across the valid length of the array
     vol_ma = pd.Series(raw_volume).rolling(20).mean().to_numpy()
 
-    # Calculate volatility array (THIS WAS MISSING)
+    # Calculate volatility array
     volatility_array = (pd.Series(raw_close).rolling(14).std().to_numpy() / atr)
     volatility_array[np.isnan(volatility_array)] = 0
     
@@ -712,14 +694,10 @@ def render_charting_layout():
     limit = min(len(df), len(volatility_array), len(raw_volume))
 
     for i in range(200, limit):
-        # Check Brain 1 (Trending) or Brain 2 (Ranging)
         is_trending = volatility_array[i] > 1.0
         strong_vol = raw_volume[i] > (vol_ma[i] * 1.1)
 
-        # 1. Determine the active stop loss based on current SuperTrend
         current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
-        
-        # 2. Safety Lock: A Buy is only valid if the Stop is BELOW the current price
         is_valid_buy_setup = (raw_close[i] > current_st_stop)
         
         b_score, s_score = 0, 0
@@ -730,9 +708,7 @@ def render_charting_layout():
         if st_dir[i] == 1: b_score += 1
         else: s_score += 1
 
-        # 3. Apply the Safety Lock to the visual trigger
         if is_trending:
-            # We add 'is_valid_buy_setup' as a mandatory requirement
             if b_score >= 4 and strong_vol and is_valid_buy_setup:
                 buy_arrow_x.append(dates[i])
                 buy_arrow_y.append(raw_low[i] * 0.98)
@@ -750,9 +726,6 @@ def render_charting_layout():
                 sell_arrow_y.append(raw_high[i] * 1.02)
 
     # 3. Render Advanced Candlestick Charts using Plotly
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.7, 0.3], vertical_spacing=0.05)
 
     # Base Candlesticks
@@ -765,7 +738,7 @@ def render_charting_layout():
     fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', width=1), name="Upper BB"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=bb_lower, line=dict(dash='dot', width=1), name="Lower BB"), row=1, col=1)
 
-    # 🎯 VISUAL TRIGGER MARKERS (The Upgrade)
+    # 🎯 VISUAL TRIGGER MARKERS
     fig.add_trace(go.Scatter(
         x=buy_arrow_x, y=buy_arrow_y, mode='markers',
         marker=dict(symbol='triangle-up', size=12, line=dict(width=1)), name="Engine BUY Signal"
@@ -823,16 +796,13 @@ def render_charting_layout():
 # ==============================================================================
 # --- MAIN WORKSPACE TERMINAL TABS ---
 # ==============================================================================
-# Create professional terminal tabs to separate data from visualization
 tab_leaderboard, tab_charting = st.tabs([
     "📊 Live Signal Leaderboard", 
     "📈 Advanced Charting & Risk"
 ])
 
-# Route the matrix to Tab 1
 with tab_leaderboard:
     display_master_leaderboard()
 
-# Route the interactive Plotly workspace to Tab 2
 with tab_charting:
     render_charting_layout()
