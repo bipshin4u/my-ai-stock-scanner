@@ -438,16 +438,24 @@ def display_master_leaderboard():
             st.session_state.stacked_results['Action Signal'] == "🩸 SUPER SELL"
         ])
 
-        # --- 3. Render Metrics ---
+        # --- 3. Render Metrics with Visual Alert Logic ---
         col1, col2, col3 = st.columns(3)
 
         # Display Buy Metrics
         col1.metric("Strong Buy Setups", total_buys)
-        col1.caption(f"({super_buys} are Super Buys)")
+        if super_buys > 0:
+            # High-visibility neon green alert
+            col1.markdown(f"<span style='color: #00FF00; font-weight: bold;'>({super_buys} are Super Buys)</span>", unsafe_allow_html=True)
+        else:
+            col1.caption(f"({super_buys} are Super Buys)")
 
         # Display Sell Metrics
         col2.metric("Strong Sell Setups", total_sells)
-        col2.caption(f"({super_sells} are Super Sells)")
+        if super_sells > 0:
+            # High-visibility bright red alert
+            col2.markdown(f"<span style='color: #FF0000; font-weight: bold;'>({super_sells} are Super Sells)</span>", unsafe_allow_html=True)
+        else:
+            col2.caption(f"({super_sells} are Super Sells)")
 
         # Display Total
         col3.metric("Total Active Table Tickers", len(st.session_state.stacked_results))
