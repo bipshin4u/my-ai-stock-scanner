@@ -727,18 +727,26 @@ def render_charting_layout():
                 sell_arrow_y.append(raw_high[i] * 1.02)
 
     # 3. Render Advanced Candlestick Charts using Plotly
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.02)
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
 
-    # Base Candlesticks
+    # Base Candlesticks (Forced Vibrant Colors for Light/Dark Theme Compatibility)
     fig.add_trace(go.Candlestick(
         x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
-        name="Price Action"
+        name="Price Action",
+        increasing_line_color='#26A69A', decreasing_line_color='#EF5350', # Teal / Red
+        increasing_fillcolor='#26A69A', decreasing_fillcolor='#EF5350'
     ), row=1, col=1)
     
     # Overlays
     fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5, color='#2962FF'), name="8 EMA"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5, color='#FF6D00'), name="21 EMA"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash', color='white', width=1), name="200 Macro EMA"), row=1, col=1)
+    
+    # Theme-Agnostic 200 EMA (Gray instead of White)
+    fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash', color='#888888', width=1.5), name="200 Macro EMA"), row=1, col=1)
+    
     fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', color='gray', width=1), name="Upper BB"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=bb_lower, line=dict(dash='dot', color='gray', width=1), name="Lower BB"), row=1, col=1)
 
@@ -760,7 +768,7 @@ def render_charting_layout():
     fig.add_hline(
         y=current_price_val, 
         line_dash="dot", 
-        line_color="#00FF00", # Bright Neon Green
+        line_color="#00FF00", 
         line_width=1.5,
         opacity=0.8,
         annotation_text=f"Current: {current_price_val:.2f}", 
@@ -769,14 +777,14 @@ def render_charting_layout():
         row=1, col=1
     )
 
-    # 📊 UPGRADED VOLUME SUBPLOT (Dynamic Colors)
-    # Determine colors: Green if Close >= Open, Red if Close < Open
-    vol_colors = ['rgba(0, 255, 0, 0.4)' if close >= open_price else 'rgba(255, 0, 0, 0.4)' 
-                  for close, open_price in zip(df['Close'], df['Open'])]
+    # 📊 UPGRADED VOLUME SUBPLOT
+    # Solid colors, no borders to prevent the "squashed blob" effect
+    vol_colors = ['#26A69A' if close >= open_price else '#EF5350' for close, open_price in zip(df['Close'], df['Open'])]
 
     fig.add_trace(go.Bar(
         x=dates, y=df['Volume'], 
         marker_color=vol_colors, 
+        marker_line_width=0, # <--- CRITICAL FIX FOR SQUASHED BARS
         name="Volume Feed"
     ), row=2, col=1)
     
@@ -786,19 +794,24 @@ def render_charting_layout():
         name="20 Vol SMA"
     ), row=2, col=1)
 
-    # Layout adjustments for a tighter, cleaner look
+    # Layout adjustments
     fig.update_layout(
         xaxis_rangeslider_visible=False, 
         xaxis2_rangeslider_visible=False, 
         height=700, 
-        margin=dict(l=10, r=40, t=20, b=10), # Added right margin for the price label
+        margin=dict(l=10, r=40, t=20, b=10), 
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
-    # Remove gaps between weekends/holidays on the x-axis
+    # Improve Axis formatting so Volume doesn't overlap the chart
+    fig.update_yaxes(title_text="Price", row=1, col=1)
+    fig.update_yaxes(title_text="Volume", showgrid=False, row=2, col=1)
+    
+    # Remove weekend gaps to make moving averages smooth
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])]) 
 
+    # Clean Streamlit call (removed the deprecated container width flag)
     st.plotly_chart(fig, width='stretch')
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
