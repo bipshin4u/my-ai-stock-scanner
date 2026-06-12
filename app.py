@@ -342,6 +342,11 @@ def run_scanner(tickers, is_discovery=False):
             vol_sma = pd.Series(raw_volume).rolling(window=20).mean().to_numpy()
             # Require today's volume to be at least 10% higher than the 20-day average
             strong_volume_confirmed = raw_volume[-1] > (vol_sma[-1] * 1.1)
+
+            # --- UNIFIED SAFETY LOCK (Calculate BEFORE Regime Check) ---
+            current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
+            is_valid_buy_setup = (raw_close[i] > current_st_stop)
+            is_valid_sell_setup = (raw_close[i] < current_st_stop)
             
             # ==========================================
             # THE DUAL-BRAIN SCORING ENGINE
@@ -360,30 +365,15 @@ def run_scanner(tickers, is_discovery=False):
                 if rsi_bullish_div: buy_score += 2
                 if rsi_bearish_div: sell_score += 2
                 
-                # 1. PRE-CALCULATION: Define the safety stop and the validity flags
-                # This determines where the SuperTrend stop loss is currently sitting
-                current_st_stop = f_lb[i] if st_dir[i] == 1 else f_ub[i]
-    
-                # A Buy is only valid if the Stop Loss is BELOW the current price
-                is_valid_buy_setup = (raw_close[i] > current_st_stop)
-                # A Sell (Short) is only valid if the Stop Loss is ABOVE the current price
-                is_valid_sell_setup = (raw_close[i] < current_st_stop)
-
-                # 2. TIERED GRADING + VOLUME RISK MANAGER
+                # TIERED GRADING + VOLUME RISK MANAGER
                 if buy_score >= 5:
                     signal = "🔥 SUPER BUY" if is_valid_buy_setup else "HOLD (Invalid Stop)"
                 elif buy_score == 4:
-                    if not is_valid_buy_setup:
-                        signal = "HOLD (Invalid Stop)"
-                    else:
-                        signal = "BUY" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    signal = "BUY" if (strong_volume_confirmed and is_valid_buy_setup) else ("HOLD (Invalid Stop)" if not is_valid_buy_setup else "⚠️ LOW VOL (Bypass)")
                 elif sell_score >= 5:
                     signal = "🩸 SUPER SELL" if is_valid_sell_setup else "HOLD (Invalid Stop)"
                 elif sell_score == 4:
-                    if not is_valid_sell_setup:
-                        signal = "HOLD (Invalid Stop)"
-                    else:
-                        signal = "SELL" if strong_volume_confirmed else "⚠️ LOW VOL (Bypass)"
+                    signal = "SELL" if (strong_volume_confirmed and is_valid_sell_setup) else ("HOLD (Invalid Stop)" if not is_valid_sell_setup else "⚠️ LOW VOL (Bypass)")
                 else:
                     signal = "HOLD"
             
@@ -393,17 +383,15 @@ def run_scanner(tickers, is_discovery=False):
                 if hitting_lower_bb and is_oversold:
                     buy_score = 5 
                     sell_score = 0
-                    # Apply safety lock to Mean Reversion Bounces
                     signal = "🔥 SUPER BUY" if (strong_volume_confirmed and is_valid_buy_setup) else ("HOLD (Invalid Stop)" if not is_valid_buy_setup else "⚠️ LOW VOL (Bypass)")
-            
                 elif hitting_upper_bb and is_overbought:
                     sell_score = 5 
                     buy_score = 0
-                    # Apply safety lock to Mean Reversion Sells
                     signal = "🩸 SUPER SELL" if (strong_volume_confirmed and is_valid_sell_setup) else ("HOLD (Invalid Stop)" if not is_valid_sell_setup else "⚠️ LOW VOL (Bypass)")
                 else:
                     signal = "HOLD"
 
+            
             numeric_score = buy_score if buy_score >= sell_score else -sell_score
 
             results.append({
@@ -794,37 +782,41 @@ def render_charting_layout():
     st.plotly_chart(fig, width='stretch')
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
-    # Pulling directly from our new native NumPy arrays instead of a DataFrame
     current_price = raw_close[-1]
     current_dir = st_dir[-1]
 
-    # Determine the active stop loss based on current trend direction
+    # 1. First, determine the active stop loss (The Calculation)
     if current_dir == 1:
         current_st_stop = f_lb[-1]  # Bullish trend -> Stop is the lower band
     else:
         current_st_stop = f_ub[-1]  # Bearish trend -> Stop is the upper band
 
-    st.markdown("### 🧮 Live Position Sizing")
-    risk_dist = abs(current_price - current_st_stop)
-    
-    if risk_dist > 0:
-        position_size_shares = int(max_risk_amount / risk_dist)
-        capital_required = position_size_shares * current_price
-
-        sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
+    # 2. Second, run the Safety Check (The Validation)
+    if current_st_stop > current_price and current_dir == 1:
+        st.error("⚠️ Invalid Risk Setup: Stop Loss (Resistance) is above Entry Price.")
+    elif current_st_stop < current_price and current_dir == -1:
+        st.error("⚠️ Invalid Risk Setup: Stop Loss (Support) is below Entry Price.")
         
-        # (Assuming you still have currency_char defined above, otherwise you can hardcode "$" or "₹")
-        sz_col1.metric("Current Entry Price", f"{current_price:,.2f}")
-        sz_col2.metric("SuperTrend Stop Loss", f"{current_st_stop:,.2f}")
-        sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
-
-        # Capital allocation warning
-        if capital_required > account_equity:
-            sz_col4.error(f"⚠️ Insufficient Buying Power")
-        else:
-            sz_col4.metric("Capital Allocated", f"{capital_required:,.2f}")
+    # 3. Third, only proceed to calculation if the setup is valid
     else:
-        st.warning("Risk distance is zero. Wait for valid volatility expansion.")
+        st.markdown("### 🧮 Live Position Sizing")
+        risk_dist = abs(current_price - current_st_stop)
+        
+        if risk_dist > 0:
+            position_size_shares = int(max_risk_amount / risk_dist)
+            capital_required = position_size_shares * current_price
+
+            sz_col1, sz_col2, sz_col3, sz_col4 = st.columns(4)
+            sz_col1.metric("Current Entry Price", f"{current_price:,.2f}")
+            sz_col2.metric("SuperTrend Stop Loss", f"{current_st_stop:,.2f}")
+            sz_col3.metric("Recommended Shares", f"{position_size_shares:,}")
+
+            if capital_required > account_equity:
+                sz_col4.error(f"⚠️ Insufficient Buying Power")
+            else:
+                sz_col4.metric("Capital Allocated", f"{capital_required:,.2f}")
+        else:
+            st.warning("Risk distance is zero. Wait for valid volatility expansion.")
                     
 # ==============================================================================
 # --- MAIN WORKSPACE TERMINAL TABS ---
