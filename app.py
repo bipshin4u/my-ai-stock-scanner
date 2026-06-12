@@ -799,7 +799,7 @@ def render_charting_layout():
     # Remove gaps between weekends/holidays on the x-axis
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])]) 
 
-    st.plotly_chart(fig, width='stretch', use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
     current_price = raw_close[-1]
