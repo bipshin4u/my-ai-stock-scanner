@@ -536,9 +536,12 @@ if st.sidebar.button("🚀 Run Custom Watchlist Scan"):
             st.session_state.last_market = market_mode 
 
         # 4. Run the scan and append
-        # Note: 'is_discovery=False' because this is a Custom Watchlist
         res_df = run_scanner(watchlist, is_discovery=False)
         st.session_state.stacked_results = res_df
+        
+        # ADD THIS LINE TO FIX THE BLANK TEXT:
+        st.session_state.scanned_batches.add("Custom Watchlist")
+        
         st.rerun()
 
 if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
@@ -733,13 +736,14 @@ def render_charting_layout():
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
 
     # Base Candlesticks (Forced Vibrant Colors for Light/Dark Theme Compatibility)
+    # Base Candlesticks (Strict Dictionary Syntax)
     fig.add_trace(go.Candlestick(
         x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
         name="Price Action",
-        increasing_line_color='#26A69A', decreasing_line_color='#EF5350', # Teal / Red
-        increasing_fillcolor='#26A69A', decreasing_fillcolor='#EF5350'
+        increasing=dict(line=dict(color='#26A69A'), fillcolor='#26A69A'), 
+        decreasing=dict(line=dict(color='#EF5350'), fillcolor='#EF5350')
     ), row=1, col=1)
-    
+      
     # Overlays
     fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5, color='#2962FF'), name="8 EMA"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5, color='#FF6D00'), name="21 EMA"), row=1, col=1)
@@ -777,17 +781,15 @@ def render_charting_layout():
         row=1, col=1
     )
 
-    # 📊 UPGRADED VOLUME SUBPLOT
-    # Solid colors, no borders to prevent the "squashed blob" effect
+    # 📊 UPGRADED VOLUME SUBPLOT (Strict Dictionary Syntax)
     vol_colors = ['#26A69A' if close >= open_price else '#EF5350' for close, open_price in zip(df['Close'], df['Open'])]
 
     fig.add_trace(go.Bar(
         x=dates, y=df['Volume'], 
-        marker_color=vol_colors, 
-        marker_line_width=0, # <--- CRITICAL FIX FOR SQUASHED BARS
+        marker=dict(color=vol_colors, line=dict(width=0)), # <--- Strictly formatted
         name="Volume Feed"
     ), row=2, col=1)
-    
+
     fig.add_trace(go.Scatter(
         x=dates, y=vol_sma, 
         line=dict(color='orange', width=1.5), 
