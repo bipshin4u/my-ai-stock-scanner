@@ -616,6 +616,10 @@ def render_charting_layout():
 
     # Pre-calculate across the valid length of the array to avoid "out of bounds"
     vol_ma = pd.Series(raw_volume).rolling(20).mean().to_numpy()
+
+    # Calculate volatility array (THIS WAS MISSING)
+    volatility_array = (pd.Series(raw_close).rolling(14).std().to_numpy() / atr)
+    volatility_array[np.isnan(volatility_array)] = 0
     
     # SAFETY GATE: Ensure we only loop as far as the shortest array allows
     limit = min(len(df), len(volatility_array), len(raw_volume))
