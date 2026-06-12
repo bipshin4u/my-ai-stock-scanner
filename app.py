@@ -494,19 +494,44 @@ st.sidebar.markdown("---")
 
 if st.sidebar.button("🚀 Run Custom Watchlist Scan"):
     with st.spinner("Analyzing custom watchlist tickers exclusively..."):
-        st.session_state.stacked_results = pd.DataFrame()
-        st.session_state.scanned_batches = {"Custom Watchlist"}
-        st.session_state.active_mode = "Custom Watchlist"
+        # 1. Define the unique mode for this section
+        target_mode = "Custom Watchlist"
+        
+        # 2. Check for Mode or Market mismatches
+        mode_mismatch = st.session_state.active_mode != target_mode
+        market_mismatch = st.session_state.get('last_market') != market_mode
+        
+        # 3. Wipe the slate if either condition is met
+        if mode_mismatch or market_mismatch:
+            st.session_state.stacked_results = pd.DataFrame()
+            st.session_state.scanned_batches = set()
+            
+            # Update state to the new reality
+            st.session_state.active_mode = target_mode
+            st.session_state.last_market = market_mode 
+
+        # 4. Run the scan and append
+        # Note: 'is_discovery=False' because this is a Custom Watchlist
         res_df = run_scanner(watchlist, is_discovery=False)
         st.session_state.stacked_results = res_df
         st.rerun()
 
 if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
     with st.spinner("Processing Ranks 1-50..."):
-        if st.session_state.active_mode != "Discovery Batches":
+        # 1. Check if the Mode is wrong OR if the Market has changed since the last scan
+        mode_mismatch = st.session_state.active_mode != "Discovery Batches"
+        market_mismatch = st.session_state.get('last_market') != market_mode
+        
+        if mode_mismatch or market_mismatch:
+            # Wipe the slate
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
+            
+            # Update state to the new reality
             st.session_state.active_mode = "Discovery Batches"
+            st.session_state.last_market = market_mode
+       
+        # 2. Run your scan and append
         df1 = run_scanner(batch_1_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df1], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 1 (Mega)")
@@ -514,10 +539,20 @@ if st.sidebar.button("🔍 Scan Batch 1: Mega-Caps (1-50)"):
 
 if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
     with st.spinner("Processing Ranks 51-100..."):
-        if st.session_state.active_mode != "Discovery Batches":
+        # 1. Check if the Mode is wrong OR if the Market has changed since the last scan
+        mode_mismatch = st.session_state.active_mode != "Discovery Batches"
+        market_mismatch = st.session_state.get('last_market') != market_mode
+        
+        if mode_mismatch or market_mismatch:
+            # Wipe the slate
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
+            
+            # Update state to the new reality
             st.session_state.active_mode = "Discovery Batches"
+            st.session_state.last_market = market_mode
+       
+        # 2. Run your scan and append
         df2 = run_scanner(batch_2_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df2], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 2 (Large)")
@@ -525,10 +560,20 @@ if st.sidebar.button("⏭️ Scan Batch 2: Large-Caps (51-100)"):
 
 if st.sidebar.button("🔬 Scan Batch 3: Mid/Small-Caps (101-150)"):
     with st.spinner("Processing Ranks 101-150..."):
-        if st.session_state.active_mode != "Discovery Batches":
+        # 1. Check if the Mode is wrong OR if the Market has changed since the last scan
+        mode_mismatch = st.session_state.active_mode != "Discovery Batches"
+        market_mismatch = st.session_state.get('last_market') != market_mode
+        
+        if mode_mismatch or market_mismatch:
+            # Wipe the slate
             st.session_state.stacked_results = pd.DataFrame()
             st.session_state.scanned_batches = set()
+            
+            # Update state to the new reality
             st.session_state.active_mode = "Discovery Batches"
+            st.session_state.last_market = market_mode
+       
+        # 2. Run your scan and append
         df3 = run_scanner(batch_3_list, is_discovery=True)
         st.session_state.stacked_results = pd.concat([st.session_state.stacked_results, df3], ignore_index=True)
         st.session_state.scanned_batches.add("Batch 3 (Mid/Small)")
@@ -539,6 +584,7 @@ if st.sidebar.button("🗑️ Clear Screen & Reset Scanner", type="primary"):
     st.session_state.stacked_results = pd.DataFrame()
     st.session_state.scanned_batches = set()
     st.session_state.active_mode = "None"
+    st.session_state.last_market = None # Reset the sentinel
     st.toast("Dashboard cache completely wiped clean!")
     st.rerun()
 
