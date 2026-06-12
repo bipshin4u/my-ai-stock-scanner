@@ -735,20 +735,19 @@ def render_charting_layout():
     
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
 
-    # Base Candlesticks (Forced Vibrant Colors for Light/Dark Theme Compatibility)
-    # Base Candlesticks (Strict Dictionary Syntax)
+    # Base Candlesticks (Bulletproof Native Properties)
     fig.add_trace(go.Candlestick(
         x=dates, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], 
         name="Price Action",
-        increasing=dict(line=dict(color='#26A69A'), fillcolor='#26A69A'), 
-        decreasing=dict(line=dict(color='#EF5350'), fillcolor='#EF5350')
+        increasing_line_color='#00CC96', # Vibrant Teal/Green
+        decreasing_line_color='#FF3E3E'  # Vibrant Red
     ), row=1, col=1)
-      
+    
     # Overlays
     fig.add_trace(go.Scatter(x=dates, y=fast_ema, line=dict(width=1.5, color='#2962FF'), name="8 EMA"), row=1, col=1)
     fig.add_trace(go.Scatter(x=dates, y=slow_ema, line=dict(width=1.5, color='#FF6D00'), name="21 EMA"), row=1, col=1)
     
-    # Theme-Agnostic 200 EMA (Gray instead of White)
+    # Theme-Agnostic 200 EMA
     fig.add_trace(go.Scatter(x=dates, y=trend_ema, line=dict(dash='dash', color='#888888', width=1.5), name="200 Macro EMA"), row=1, col=1)
     
     fig.add_trace(go.Scatter(x=dates, y=bb_upper, line=dict(dash='dot', color='gray', width=1), name="Upper BB"), row=1, col=1)
@@ -781,15 +780,16 @@ def render_charting_layout():
         row=1, col=1
     )
 
-    # 📊 UPGRADED VOLUME SUBPLOT (Strict Dictionary Syntax)
-    vol_colors = ['#26A69A' if close >= open_price else '#EF5350' for close, open_price in zip(df['Close'], df['Open'])]
+    # 📊 UPGRADED VOLUME SUBPLOT
+    # Safe numpy array to guarantee color array length exactly matches the data length
+    vol_colors = np.where(df['Close'] >= df['Open'], '#00CC96', '#FF3E3E')
 
     fig.add_trace(go.Bar(
         x=dates, y=df['Volume'], 
-        marker=dict(color=vol_colors, line=dict(width=0)), # <--- Strictly formatted
+        marker_color=vol_colors, 
         name="Volume Feed"
     ), row=2, col=1)
-
+    
     fig.add_trace(go.Scatter(
         x=dates, y=vol_sma, 
         line=dict(color='orange', width=1.5), 
@@ -806,14 +806,10 @@ def render_charting_layout():
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     
-    # Improve Axis formatting so Volume doesn't overlap the chart
+    # Improve Axis formatting
     fig.update_yaxes(title_text="Price", row=1, col=1)
     fig.update_yaxes(title_text="Volume", showgrid=False, row=2, col=1)
-    
-    # Remove weekend gaps to make moving averages smooth
-    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])]) 
 
-    # Clean Streamlit call (removed the deprecated container width flag)
     st.plotly_chart(fig, width='stretch')
 
     # -- DYNAMIC POSITION SIZING EXECUTION --
