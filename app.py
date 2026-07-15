@@ -87,9 +87,10 @@ else:
     ]
     
     if nifty50_live:
-        b1_default = ", ".join(nifty50_live)              # All 50 of Nifty 50
-        b2_default = ", ".join(niftynext50_live)          # All 50 of Nifty Next 50
-        b3_default = ", ".join(midcap_50_static)          # 50 Institutional Midcaps
+        # Convert to string and filter out 'nan' floats from empty Wikipedia rows
+        b1_default = ", ".join([str(t) for t in nifty50_live if str(t).lower() != 'nan']) 
+        b2_default = ", ".join([str(t) for t in niftynext50_live if str(t).lower() != 'nan'])
+        b3_default = ", ".join([str(t) for t in midcap_50_static if str(t).lower() != 'nan'])
     else:
         b1_default = "RELIANCE, TCS, INFY, HDFCBANK, ICICIBANK"
         b2_default = ""
