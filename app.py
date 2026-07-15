@@ -421,7 +421,16 @@ def display_master_leaderboard():
     
     if not df.empty:
         df = df.drop_duplicates(subset=["Ticker"], keep="last")
-        df['SortOrder'] = df['Action Signal'].map({'BUY': 0, 'SELL': 1, 'HOLD': 2})
+       # --- ROBUST SORTING LOGIC ---
+        def get_sort_order(val):
+            val = str(val)
+            if "SUPER BUY" in val: return 0
+            if "BUY" in val: return 1
+            if "SUPER SELL" in val: return 2
+            if "SELL" in val: return 3
+            return 4 # Puts HOLDs and Bypasses at the bottom
+            
+        df['SortOrder'] = df['Action Signal'].apply(get_sort_order)
         df = df.sort_values(by=["SortOrder", "RawScore"], ascending=[True, False]).drop(columns=['SortOrder'])
 
         # --- UPGRADED SUMMARY METRICS ---
@@ -629,14 +638,19 @@ def render_charting_layout():
         st.error("Unable to render chart: Data feed timed out.")
         return
 
-    # Flat array transformations for native calculations
-    raw_open = df['Open'].dropna().values.flatten().astype('float64')  # <--- ADD THIS LINE
-    raw_close = df['Close'].dropna().values.flatten().astype('float64')
-    raw_high = df['High'].dropna().values.flatten().astype('float64')
-    raw_low = df['Low'].dropna().values.flatten().astype('float64')
-    raw_volume = df['Volume'].dropna().values.flatten().astype('float64')
+    # --- CRITICAL ALIGNMENT FIX ---
+    # Drop NaNs across the entire DataFrame BEFORE extracting columns.
+    # This guarantees 'dates' and all price arrays are the exact same length.
+    df = df.dropna()
     dates = df.index
 
+    # Now extract safely
+    raw_open = df['Open'].values.flatten().astype('float64')
+    raw_close = df['Close'].values.flatten().astype('float64')
+    raw_high = df['High'].values.flatten().astype('float64')
+    raw_low = df['Low'].values.flatten().astype('float64')
+    raw_volume = df['Volume'].values.flatten().astype('float64')
+    
     # 1. Compute Indicators for the entire historical dataset
     fast_ema = compute_native_ema(raw_close.copy(), 8)
     slow_ema = compute_native_ema(raw_close.copy(), 21)
@@ -726,12 +740,12 @@ def render_charting_layout():
     
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.75, 0.25], vertical_spacing=0.03)
 
-    # Base Candlesticks (Using Safe Flattened Arrays)
+    # Base Candlesticks (Strict Dictionary Format)
     fig.add_trace(go.Candlestick(
         x=dates, open=raw_open, high=raw_high, low=raw_low, close=raw_close, 
         name="Price Action",
-        increasing_line_color='#00CC96', 
-        decreasing_line_color='#FF3E3E'  
+        increasing=dict(line=dict(color='#00CC96'), fillcolor='#00CC96'), 
+        decreasing=dict(line=dict(color='#FF3E3E'), fillcolor='#FF3E3E')  
     ), row=1, col=1)
     
     # Overlays
@@ -771,15 +785,15 @@ def render_charting_layout():
         row=1, col=1
     )
 
-    # 📊 UPGRADED VOLUME SUBPLOT (Using Safe Flattened Arrays)
-    vol_colors = np.where(raw_close >= raw_open, '#00CC96', '#FF3E3E')
+    # 📊 UPGRADED VOLUME SUBPLOT 
+    vol_colors = ['#00CC96' if c >= o else '#FF3E3E' for c, o in zip(raw_close, raw_open)]
 
     fig.add_trace(go.Bar(
         x=dates, y=raw_volume, 
-        marker_color=vol_colors, 
+        marker=dict(color=vol_colors, line=dict(width=0)), 
         name="Volume Feed"
     ), row=2, col=1)
-        
+            
     fig.add_trace(go.Scatter(
         x=dates, y=vol_sma, 
         line=dict(color='orange', width=1.5), 
